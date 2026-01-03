@@ -65,11 +65,11 @@ const PlannerPage = () => {
       setLoading(false);
 
       if (response && response.status === 'success') {
-        // 🌟 FIX: We now receive { trip, weather }
-        // We merge them into one 'result' object for the Display Component
+        // 🌟 FIX: Include routeGeoJSON in the result object
         const resultData = {
            ...response.data.trip, 
-           weather: response.data.weather 
+           weather: response.data.weather,
+           routeGeoJSON: response.data.routeGeoJSON
         };
         setResult(resultData);
       }
@@ -194,11 +194,11 @@ const PlannerPage = () => {
 
         {/* ➡️ Right Panel: The Map (Only shows when we have a Result) */}
         {result && (
-          <div className="map-panel" style={{ flex: 1, position: 'relative' }}>
+          <div className="map-panel" style={{ flex: 1, position: 'relative', minWidth: '300px' }}>
              <div style={{ width: '100%', height: '100%' }}>
                 {(() => {
-                   const activities = (result.itinerary || result).flatMap(day => day.activities);
-                   const route = (result.itinerary || result).route || result.route;
+                   const activities = (result.itinerary || []).flatMap(day => day.activities || []);
+                   const route = result.routeGeoJSON;
                    return <MapComponent activities={activities} routeGeoJSON={route} />;
                 })()}
              </div>

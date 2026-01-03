@@ -44,7 +44,9 @@ const ActivitySchema = new mongoose.Schema({
   },
   timeSlot: String, // e.g., "10:00 AM - 12:00 PM"
   description: String,
-  estimatedCost: Number
+  estimatedCost: Number,
+  dayNumber: Number,   // 💡 Added for better map ordering
+  orderInDay: Number   // 💡 Added for better map ordering
 });
 
 const DaySchema = new mongoose.Schema({

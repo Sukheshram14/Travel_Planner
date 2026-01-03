@@ -40,6 +40,14 @@
     /* Muted Blue-Grey */
 
     --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+
+    /* 🌈 Standard Semantic Aliases (Used in components) */
+    --color-bg: var(--bg-main);
+    --color-card: var(--bg-card);
+    --color-text: var(--text-main);
+    --color-border: rgba(0, 255, 255, 0.2);
+    --color-neon-blue: var(--color-blue);
+    --color-neon-cyan: var(--color-cyan);
 }
 
 /* ☀️ Light Mode Overrides */

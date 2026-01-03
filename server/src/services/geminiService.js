@@ -54,6 +54,18 @@ const generateItinerary = async (tripDetails) => {
 
     const prompt = `
       TASK: Create a ${tripDetails.days}-day itinerary for a trip to ${tripDetails.destination}.
+      
+      GEOGRAPHIC CONSTRAINTS (CRITICAL):
+      1. All activities must be located within 50km of ${tripDetails.destination}.
+      2. Do NOT plan cross-country tours or travel to other states.
+      
+      SEARCH QUERY RULES (CRITICAL):
+      - Your 'searchQuery' must be a CLEAN entity name.
+      - ❌ NO action words: "timings", "aarti", "lunch", "dinner", "meditation", "events".
+      - ❌ NO instructions: "near", "schedule", "view".
+      - ✅ GOOD: "Govindaraja Swamy Temple", "Iskcon Temple Tirupati".
+      - ❌ BAD: "Govindaraja Swamy Temple evening aarti", "Restaurants near temple".
+      
       CONTEXT:
       - Origin: ${tripDetails.origin || "Not specified"}
       - Travelers: ${tripDetails.travelers}

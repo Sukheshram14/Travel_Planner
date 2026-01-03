@@ -7,7 +7,7 @@
  * ==========================================================================================================================================================
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Map, { Marker, Popup, Source, Layer, NavigationControl } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { FaMapMarkerAlt } from 'react-icons/fa';
@@ -23,34 +23,63 @@ const TOMTOM_KEY = import.meta.env.VITE_TOMTOM_API_KEY;
 const TRAFFIC_URL = `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`;
 
 const MapComponent = ({ activities, routeGeoJSON }) => {
+  const mapRef = useRef();
   
   // State for Visual Layers
   const [mapStyle, setMapStyle] = useState('dark'); // 'dark' | 'satellite'
   const [showTraffic, setShowTraffic] = useState(false);
 
-  // 1. Calculate Center & Bounds
+  console.log("🗺️ MapComponent Data:", { activitiesCount: activities?.length, hasRoute: !!routeGeoJSON });
+
+  // 1. Calculate Center
   const validActivity = activities.find(a => a.location?.lat);
   const initialViewState = {
     longitude: validActivity ? validActivity.location.lng : 2.3522,
     latitude: validActivity ? validActivity.location.lat : 48.8566,
     zoom: 12,
-    pitch: 45, // 💡 3D Effect: Tilt the map!
+    pitch: 45, 
     bearing: 0
   };
 
-  // 2. Route Layer Style
+  // 🚀 RESIZE & AUTO-FLY: Recenter map whenever activities change
+  useEffect(() => {
+    if (mapRef.current) {
+        const map = mapRef.current.getMap();
+        if (map) {
+          map.resize();
+          if (validActivity) {
+            console.log("✈️ Flying to new destination...");
+            map.flyTo({
+              center: [validActivity.location.lng, validActivity.location.lat],
+              duration: 2000,
+              essential: true
+            });
+          }
+        }
+    }
+  }, [activities]);
+
+  // 2. Route Layer Style (Dynamic Colors per Day)
   const routeLayerStyle = {
     id: 'route-line',
     type: 'line',
     paint: {
-      'line-color': mapStyle === 'satellite' ? '#ffeb3b' : '#00f7ff', // Yellow on Satellite, Cyan on Dark
+      'line-color': ['coalesce', ['get', 'color'], '#00f7ff'], 
       'line-width': 4,
       'line-opacity': 0.9
     }
   };
 
   return (
-    <div style={{ height: '100%', width: '100%', borderRadius: '12px', overflow: 'hidden', position: 'relative' }}>
+    <div style={{ 
+      height: '100%', 
+      width: '100%', 
+      borderRadius: '12px', 
+      overflow: 'hidden', 
+      position: 'relative',
+      border: '2px solid var(--color-neon-cyan)', // 🚩 DEBUG BORDER
+      background: '#0a0a0a'
+    }}>
       
       {/* 🛠️ Floating Layer Controls */}
       <LayerToggle 
@@ -61,6 +90,9 @@ const MapComponent = ({ activities, routeGeoJSON }) => {
       />
 
       <Map
+        ref={mapRef}
+        onLoad={() => console.log("✅ Map Loaded Successfully")}
+        onError={(e) => console.error("❌ Map Error:", e.error)}
         initialViewState={initialViewState}
         style={{ width: '100%', height: '100%' }}
         // If Satellite, we still use a base style (Dark) but overlay the Raster Image on top
@@ -75,7 +107,6 @@ const MapComponent = ({ activities, routeGeoJSON }) => {
             <Layer 
               id="satellite-layer" 
               type="raster" 
-              beforeId="route-line" // Draw below the route
               paint={{ 'raster-opacity': 1 }}
             />
           </Source>
@@ -83,7 +114,7 @@ const MapComponent = ({ activities, routeGeoJSON }) => {
 
         {/* 🚦 TRAFFIC LAYER (Conditional) */}
         {showTraffic && TOMTOM_KEY && (
-           <Source id="traffic-source" type="raster" tiles={[TRAFFIC_URL]} tileSize={256}>
+          <Source id="traffic-source" type="raster" tiles={[TRAFFIC_URL]} tileSize={256}>
             <Layer 
               id="traffic-layer" 
               type="raster" 
@@ -92,7 +123,7 @@ const MapComponent = ({ activities, routeGeoJSON }) => {
           </Source>
         )}
 
-        {/* 🛣️ The Real Route (GeoJSON) */}
+        {/* 🛣️ The Real Route (GeoJSON) - FeatureCollection support */}
         {routeGeoJSON && (
           <Source id="route-source" type="geojson" data={routeGeoJSON}>
             <Layer {...routeLayerStyle} />
@@ -105,6 +136,12 @@ const MapComponent = ({ activities, routeGeoJSON }) => {
           const lng = activity.location?.lng;
           if (!lat || !lng) return null;
 
+          // Define Marker Color (Cycle or use day info)
+          const dayColors = ['#00f7ff', '#ff00ff', '#00ff00', '#ffff00', '#ff8000', '#ff0000', '#8000ff'];
+          const markerColor = activity.dayNumber 
+            ? dayColors[(activity.dayNumber - 1) % dayColors.length]
+            : (mapStyle === 'satellite' ? '#ffeb3b' : '#00f7ff');
+
           return (
             <Marker 
               key={idx} 
@@ -113,10 +150,19 @@ const MapComponent = ({ activities, routeGeoJSON }) => {
               anchor="bottom"
             >
               <div className="custom-marker" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}>
-                <span style={{ background: mapStyle === 'satellite' ? '#ffeb3b' : '#00f7ff', color: '#000', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
-                  {idx + 1}
+                <span style={{ 
+                  background: markerColor, 
+                  color: '#000', 
+                  padding: '2px 6px', 
+                  borderRadius: '4px', 
+                  fontSize: '9px', 
+                  fontWeight: 'bold', 
+                  marginBottom: '2px',
+                  boxShadow: '0 0 5px rgba(0,0,0,0.5)'
+                }}>
+                  {activity.dayNumber ? `D${activity.dayNumber}-${activity.orderInDay || (idx + 1)}` : (idx + 1)}
                 </span>
-                <FaMapMarkerAlt size={24} color={mapStyle === 'satellite' ? '#ffeb3b' : '#00f7ff'} style={{ filter: 'drop-shadow(0 0 5px rgba(0,0,0,0.8))' }}/>
+                <FaMapMarkerAlt size={22} color={markerColor} style={{ filter: 'drop-shadow(0 0 5px rgba(0,0,0,0.8))' }}/>
               </div>
             </Marker>
           );

@@ -25,13 +25,23 @@ const GEOAPIFY_KEY = process.env.GEOAPIFY_API_KEY;
  * getCoordinates
  * --------------
  * @param {string} locationName - e.g., "Munnar, Kerala"
+ * @param {number} proximityLat - [Optional] Bias search near this latitude
+ * @param {number} proximityLng - [Optional] Bias search near this longitude
  * @returns {Object} - { lat: 10.08, lng: 77.05, formatted: "Munnar, India" }
  */
-const getCoordinates = async (locationName) => {
+const getCoordinates = async (locationName, proximityLat = null, proximityLng = null) => {
   if (!locationName) return null;
 
   try {
-    const url = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(locationName)}&apiKey=${GEOAPIFY_KEY}`;
+    let url = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(locationName)}&apiKey=${GEOAPIFY_KEY}`;
+    
+    // 💡 FORCE: If we have a destination city, force the search to be within a 50km radius.
+    // This physically prevents "Railway Station" from picking one in USA or Africa.
+    if (proximityLat && proximityLng) {
+      url += `&filter=circle:${proximityLng},${proximityLat},50000`; // 50,000 meters = 50km
+      url += `&bias=proximity:${proximityLng},${proximityLat}|countrycode:in`;
+    }
+
     const response = await axios.get(url);
 
     if (response.data.features && response.data.features.length > 0) {
