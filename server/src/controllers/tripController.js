@@ -115,7 +115,14 @@ const createTrip = async (req, res) => {
             const coords = await geoService.getCoordinates(query, destCoords.lat, destCoords.lng);
             
             if (coords) {
-              activity.location = { lat: coords.lat, lng: coords.lng, address: coords.formatted };
+              // 💡 Generate Google Maps Deep Link
+              const gMapLink = `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`;
+              activity.location = { 
+                lat: coords.lat, 
+                lng: coords.lng, 
+                address: coords.formatted,
+                gMapLink 
+              };
               console.log(`✅ Located: ${coords.formatted}`);
             } else {
               console.warn(`⚠️ Not Found: Could not locate "${query}" within 50km.`);
@@ -131,6 +138,8 @@ const createTrip = async (req, res) => {
       endDate,
       budget,
       travelers,
+      famousThings: aiResponse.famousThings, // 💡 New Pro Field
+      suggestedStay: aiResponse.suggestedStay, // 💡 New Pro Field
       itinerary: aiResponse.days, // Map AI "days" to Schema "days"
       isGenerated: true
     });
@@ -279,9 +288,29 @@ const getTrip = async (req, res) => {
   }
 };
 
+/**
+ * getNearbyFuel
+ * -------------
+ * Endpoint to fetch nearby fuel stations based on map center.
+ */
+const getNearbyFuel = async (req, res) => {
+  const { lat, lng } = req.query;
+  if (!lat || !lng) {
+    return res.status(400).json({ error: "Lat/Lng required" });
+  }
+
+  try {
+    const fuelStations = await geoService.getNearbyFuelStations(lat, lng);
+    res.json(fuelStations);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createTrip,
-  getTrip
+  getTrip,
+  getNearbyFuel
 };
 
 /**

@@ -1,39 +1,48 @@
-import React from 'react';
-import { FaLayerGroup, FaCar, FaGlobeAmericas, FaMap } from 'react-icons/fa';
+import { FaLayerGroup, FaCar, FaGlobeAmericas, FaMap, FaGasPump, FaSun, FaMoon } from 'react-icons/fa';
 
-const LayerToggle = ({ mapStyle, setMapStyle, showTraffic, setShowTraffic }) => {
+const LayerToggle = ({ mapStyle, setMapStyle, showTraffic, setShowTraffic, showFuel, setShowFuel }) => {
+  
+  const cycleStyle = () => {
+    if (mapStyle === 'dark') setMapStyle('light');
+    else if (mapStyle === 'light') setMapStyle('satellite');
+    else setMapStyle('dark');
+  };
+
   return (
     <div style={{
-      position: 'absolute',
-      top: '1rem',
-      right: '1rem', // Below NavigationControl (which is usually top-right)
-      marginTop: '40px', // Offset for standard NavControl
-      background: 'rgba(0,0,0,0.8)',
-      borderRadius: '8px',
-      padding: '0.5rem',
+      background: 'rgba(10,10,10,0.9)',
+      borderRadius: '12px',
+      padding: '0.6rem',
       display: 'flex',
       flexDirection: 'column',
-      gap: '0.5rem',
-      zIndex: 10
+      gap: '0.6rem',
+      zIndex: 10,
+      border: '1px solid #333',
+      boxShadow: '0 4px 15px rgba(0,0,0,0.5)'
     }}>
       
-      {/* 🌍 Style Switcher */}
+      {/* 🌍 Style Switcher (Dark -> Light -> Satellite) */}
       <button 
-        onClick={() => setMapStyle(prev => prev === 'dark' ? 'satellite' : 'dark')}
-        title="Toggle Satellite View"
+        onClick={cycleStyle}
+        title="Cycle Map Style"
         style={{
-          background: mapStyle === 'satellite' ? 'var(--color-neon-blue)' : 'transparent',
+          background: 'transparent',
           border: 'none',
           color: '#fff',
           cursor: 'pointer',
           padding: '0.5rem',
-          borderRadius: '4px',
+          borderRadius: '6px',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          transition: 'background 0.2s'
         }}
+        onMouseEnter={(e) => e.target.style.background = '#222'}
+        onMouseLeave={(e) => e.target.style.background = 'transparent'}
       >
-        {mapStyle === 'dark' ? <FaGlobeAmericas size={20} /> : <FaMap size={20} />}
+        {mapStyle === 'dark' ? <FaMoon size={18} color="#00f7ff" /> : 
+         mapStyle === 'light' ? <FaSun size={18} color="#ffeb3b" /> : 
+         <FaGlobeAmericas size={18} color="#4caf50" />}
       </button>
 
       {/* 🚦 Traffic Toggle */}
@@ -41,18 +50,37 @@ const LayerToggle = ({ mapStyle, setMapStyle, showTraffic, setShowTraffic }) => 
         onClick={() => setShowTraffic(!showTraffic)}
         title="Toggle Live Traffic"
         style={{
-          background: showTraffic ? '#ff4d4d' : 'transparent',
+          background: showTraffic ? 'rgba(255, 77, 77, 0.2)' : 'transparent',
           border: 'none',
-          color: '#fff',
+          color: showTraffic ? '#ff4d4d' : '#fff',
           cursor: 'pointer',
           padding: '0.5rem',
-          borderRadius: '4px',
+          borderRadius: '6px',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
         }}
       >
-        <FaCar size={20} />
+        <FaCar size={18} />
+      </button>
+
+      {/* ⛽ Fuel Stations Toggle */}
+      <button 
+        onClick={() => setShowFuel(!showFuel)}
+        title="Toggle Nearby Fuel Stations"
+        style={{
+          background: showFuel ? 'rgba(255, 128, 0, 0.2)' : 'transparent',
+          border: 'none',
+          color: showFuel ? '#ff8000' : '#fff',
+          cursor: 'pointer',
+          padding: '0.5rem',
+          borderRadius: '6px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <FaGasPump size={18} />
       </button>
 
     </div>

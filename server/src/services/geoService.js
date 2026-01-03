@@ -91,4 +91,21 @@ const getTouristPlaces = async (lat, lng) => {
   }
 };
 
-module.exports = { getCoordinates, getTouristPlaces };
+const getNearbyFuelStations = async (lat, lng) => {
+  if (!lat || !lng) return [];
+  try {
+    const url = `https://api.geoapify.com/v2/places?categories=amenity.fuel&filter=circle:${lng},${lat},5000&limit=10&apiKey=${GEOAPIFY_KEY}`;
+    const response = await axios.get(url);
+    return response.data.features.map(f => ({
+      name: f.properties.name || "Petrol Station",
+      lat: f.properties.lat,
+      lng: f.properties.lon,
+      address: f.properties.formatted
+    }));
+  } catch (error) {
+    console.error("❌ Fuel Search Error:", error.message);
+    return [];
+  }
+};
+
+module.exports = { getCoordinates, getTouristPlaces, getNearbyFuelStations };

@@ -185,19 +185,41 @@ const PlannerPage = () => {
 
           {/* Itinerary Result */}
           {result && (
-            <ItineraryDisplay 
-              itinerary={result.itinerary || result} // handle both structures just in case
-              weather={result.weather} 
-            />
+            <div id="printable-itinerary">
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+                <button 
+                  onClick={() => window.print()} 
+                  style={{ 
+                    padding: '8px 15px', 
+                    background: '#222', 
+                    color: 'var(--color-neon-blue)', 
+                    border: '1px solid var(--color-neon-blue)', 
+                    borderRadius: '6px', 
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px'
+                  }}
+                  className="no-print"
+                >
+                  📄 Save as PDF
+                </button>
+              </div>
+              <ItineraryDisplay 
+                itinerary={result.itinerary || result} 
+                weather={result.weather} 
+              />
+            </div>
           )}
         </div>
 
-        {/* ➡️ Right Panel: The Map (Only shows when we have a Result) */}
+        {/* ➡️ Right Panel: The Map */}
         {result && (
-          <div className="map-panel" style={{ flex: 1, position: 'relative', minWidth: '300px' }}>
+          <div className="map-panel no-print" style={{ flex: 1, position: 'relative', minWidth: '300px' }}>
              <div style={{ width: '100%', height: '100%' }}>
                 {(() => {
-                   const activities = (result.itinerary || []).flatMap(day => day.activities || []);
+                   const resData = (result.itinerary || result);
+                   const activities = (resData.days || resData.itinerary || []).flatMap(day => day.activities || []);
                    const route = result.routeGeoJSON;
                    return <MapComponent activities={activities} routeGeoJSON={route} />;
                 })()}
@@ -206,6 +228,27 @@ const PlannerPage = () => {
         )}
 
       </div>
+
+      {/* 📊 Global Responsive & Print Styles */}
+      <style>{`
+        @media (max-width: 900px) {
+          .planner-split-container {
+            flex-direction: column !important;
+          }
+          .map-panel {
+            height: 400px !important;
+            min-width: 100% !important;
+          }
+        }
+        @media print {
+          .no-print { display: none !important; }
+          body { background: #fff !important; color: #000 !important; }
+          #printable-itinerary { width: 100% !important; padding: 0 !important; }
+          .card { border: 1px solid #ddd !important; background: #fff !important; }
+          h2, h3, h4 { color: #000 !important; }
+          p, span { color: #333 !important; }
+        }
+      `}</style>
     </div>
   );
 };

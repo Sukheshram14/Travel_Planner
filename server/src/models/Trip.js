@@ -36,45 +36,50 @@ const mongoose = require('mongoose');
 
 const ActivitySchema = new mongoose.Schema({
   name: { type: String, required: true }, // e.g., "Eiffel Tower"
-  type: { type: String, default: 'attraction' }, // 💡 RELAXED: No enum to prevent AI crashes
+  type: { type: String, default: 'attraction' }, 
   location: {
     lat: Number,
     lng: Number,
-    address: String
+    address: String,
+    gMapLink: String // 💡 Deep link for navigation
   },
-  timeSlot: String, // e.g., "10:00 AM - 12:00 PM"
+  timeSlot: String,
   description: String,
-  estimatedCost: Number,
-  dayNumber: Number,   // 💡 Added for better map ordering
-  orderInDay: Number   // 💡 Added for better map ordering
+  estimatedCostINR: Number, // 💡 Renamed for local clarity
+  dayNumber: Number,   
+  orderInDay: Number   
 });
 
 const DaySchema = new mongoose.Schema({
-  dayNumber: { type: Number, required: true }, // Day 1, Day 2...
-  theme: String, // e.g., "Historic Paris"
-  activities: [ActivitySchema] // 💡 Nested Schema (Array of Activities)
+  dayNumber: { type: Number, required: true },
+  theme: String,
+  activities: [ActivitySchema]
 });
 
 const TripSchema = new mongoose.Schema({
   // Metadata
   userId: { 
     type: String, 
-    required: false, // For now, we allow guest users
-    index: true // 💡 TEACH: rapid search. Like the index in a textbook, makes finding trips by User fast.
+    required: false, 
+    index: true 
   },
   
-  // User Inputs (The "Brief")
+  // User Inputs
   destination: { type: String, required: true },
   startDate: { type: Date, required: true },
   endDate: { type: Date, required: true },
   budget: { type: String, enum: ['cheap', 'moderate', 'luxury'], required: true },
   travelers: { type: String, enum: ['solo', 'couple', 'family', 'friends'], default: 'solo' },
   
-  // The Generated Itinerary (The "Result")
+  // Pro Fields
+  famousThings: [String],
+  suggestedStay: String,
+  
+  // The Generated Itinerary
   itinerary: [DaySchema],
   
   // Status
-  isGenerated: { type: Boolean, default: false }, // Has the AI finished?
+  isGenerated: { type: Boolean, default: false }, 
   createdAt: { type: Date, default: Date.now }
 });
 

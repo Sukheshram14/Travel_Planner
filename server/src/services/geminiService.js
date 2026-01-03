@@ -59,12 +59,14 @@ const generateItinerary = async (tripDetails) => {
       1. All activities must be located within 50km of ${tripDetails.destination}.
       2. Do NOT plan cross-country tours or travel to other states.
       
+      FINANCIALS & STAY (NEW):
+      - Budgeting: Provide estimated costs in **Indian Rupees (₹)**.
+      - Accommodations: For each day (or the trip start), suggest a specific Hotel/Hostel name suitable for a ${tripDetails.budget} budget.
+      
       SEARCH QUERY RULES (CRITICAL):
       - Your 'searchQuery' must be a CLEAN entity name.
       - ❌ NO action words: "timings", "aarti", "lunch", "dinner", "meditation", "events".
-      - ❌ NO instructions: "near", "schedule", "view".
       - ✅ GOOD: "Govindaraja Swamy Temple", "Iskcon Temple Tirupati".
-      - ❌ BAD: "Govindaraja Swamy Temple evening aarti", "Restaurants near temple".
       
       CONTEXT:
       - Origin: ${tripDetails.origin || "Not specified"}
@@ -73,6 +75,8 @@ const generateItinerary = async (tripDetails) => {
       - Interests: ${tripDetails.interests}
       ${originText}
       ${ragContext}
+      
+      OUTPUT FORMAT: Include a "famousThings" array (strings) for the destination and ensure each activity has an "estimatedCostINR" field.
     `;
 
     // 🚀 CONTROLLED GENERATION with RETRY LOGIC (Handles 429 Rate Limits)
@@ -92,6 +96,8 @@ const generateItinerary = async (tripDetails) => {
               properties: {
                 tripName: { type: "string" },
                 travelAdvice: { type: "string" },
+                famousThings: { type: "array", items: { type: "string" } },
+                suggestedStay: { type: "string", description: "Recommended hotel/hostel for this trip" },
                 days: {
                   type: "array",
                   items: {
@@ -108,9 +114,10 @@ const generateItinerary = async (tripDetails) => {
                             type: { type: "string" },
                             timeSlot: { type: "string" },
                             description: { type: "string" },
-                            searchQuery: { type: "string" }
+                            searchQuery: { type: "string" },
+                            estimatedCostINR: { type: "number", description: "Estimated cost in Rupees (₹)" }
                           },
-                          required: ["name", "type", "timeSlot", "description", "searchQuery"]
+                          required: ["name", "type", "timeSlot", "description", "searchQuery", "estimatedCostINR"]
                         }
                       }
                     },
@@ -118,7 +125,7 @@ const generateItinerary = async (tripDetails) => {
                   }
                 }
               },
-              required: ["tripName", "travelAdvice", "days"]
+              required: ["tripName", "travelAdvice", "days", "famousThings", "suggestedStay"]
             }
           }
         });

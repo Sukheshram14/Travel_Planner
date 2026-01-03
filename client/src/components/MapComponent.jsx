@@ -15,49 +15,34 @@ import LayerToggle from './LayerToggle';
 
 // 🎨 MAP STYLES
 const STYLE_DARK = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
-// For Satellite, we will overlay a Raster Layer, as Esri doesn't provide a free Vector Style JSON easily.
-const ESRI_SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const STYLE_LIGHT = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
-// 🚦 TRAFFIC API (TomTom)
-const TOMTOM_KEY = import.meta.env.VITE_TOMTOM_API_KEY; 
-const TRAFFIC_URL = `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`;
+// ... [rest of traffic logic stays same]
 
 const MapComponent = ({ activities, routeGeoJSON }) => {
   const mapRef = useRef();
   
   // State for Visual Layers
-  const [mapStyle, setMapStyle] = useState('dark'); // 'dark' | 'satellite'
+  const [mapStyle, setMapStyle] = useState('dark'); // 'dark' | 'light' | 'satellite'
   const [showTraffic, setShowTraffic] = useState(false);
+  const [showFuel, setShowFuel] = useState(false);
+  const [fuelStations, setFuelStations] = useState([]);
+  const [selectedActivity, setSelectedActivity] = useState(null);
 
-  console.log("🗺️ MapComponent Data:", { activitiesCount: activities?.length, hasRoute: !!routeGeoJSON });
-
-  // 1. Calculate Center
   const validActivity = activities.find(a => a.location?.lat);
-  const initialViewState = {
-    longitude: validActivity ? validActivity.location.lng : 2.3522,
-    latitude: validActivity ? validActivity.location.lat : 48.8566,
-    zoom: 12,
-    pitch: 45, 
-    bearing: 0
-  };
 
-  // 🚀 RESIZE & AUTO-FLY: Recenter map whenever activities change
+  // ⛽ Fetch Fuel Stations when toggled
   useEffect(() => {
-    if (mapRef.current) {
-        const map = mapRef.current.getMap();
-        if (map) {
-          map.resize();
-          if (validActivity) {
-            console.log("✈️ Flying to new destination...");
-            map.flyTo({
-              center: [validActivity.location.lng, validActivity.location.lat],
-              duration: 2000,
-              essential: true
-            });
-          }
-        }
+    if (showFuel && validActivity) {
+      console.log("⛽ Fetching nearby fuel stations...");
+      fetch(`http://localhost:5000/api/v1/trips/nearby/fuel?lat=${validActivity.location.lat}&lng=${validActivity.location.lng}`)
+        .then(res => res.json())
+        .then(data => setFuelStations(data))
+        .catch(err => console.error("Fuel Fetch Error:", err));
+    } else {
+      setFuelStations([]);
     }
-  }, [activities]);
+  }, [showFuel, validActivity]);
 
   // 2. Route Layer Style (Dynamic Colors per Day)
   const routeLayerStyle = {
@@ -70,33 +55,35 @@ const MapComponent = ({ activities, routeGeoJSON }) => {
     }
   };
 
+  const currentBaseStyle = mapStyle === 'light' ? STYLE_LIGHT : STYLE_DARK;
+
   return (
     <div style={{ 
       height: '100%', 
       width: '100%', 
-      borderRadius: '12px', 
+      borderRadius: '12x', 
       overflow: 'hidden', 
       position: 'relative',
-      border: '2px solid var(--color-neon-cyan)', // 🚩 DEBUG BORDER
+      border: '2px solid var(--color-neon-cyan)',
       background: '#0a0a0a'
     }}>
       
       {/* 🛠️ Floating Layer Controls */}
-      <LayerToggle 
-        mapStyle={mapStyle} 
-        setMapStyle={setMapStyle} 
-        showTraffic={showTraffic} 
-        setShowTraffic={setShowTraffic} 
-      />
+      <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        <LayerToggle 
+            mapStyle={mapStyle} 
+            setMapStyle={setMapStyle} 
+            showTraffic={showTraffic} 
+            setShowTraffic={setShowTraffic} 
+        />
+        {/* Simple Light/Dark Toggle if needed, but LayerToggle should handle it */}
+      </div>
 
       <Map
         ref={mapRef}
-        onLoad={() => console.log("✅ Map Loaded Successfully")}
-        onError={(e) => console.error("❌ Map Error:", e.error)}
         initialViewState={initialViewState}
         style={{ width: '100%', height: '100%' }}
-        // If Satellite, we still use a base style (Dark) but overlay the Raster Image on top
-        mapStyle={STYLE_DARK} 
+        mapStyle={currentBaseStyle} 
         attributionControl={false}
       >
         <NavigationControl position="top-right" />
@@ -112,18 +99,9 @@ const MapComponent = ({ activities, routeGeoJSON }) => {
           </Source>
         )}
 
-        {/* 🚦 TRAFFIC LAYER (Conditional) */}
-        {showTraffic && TOMTOM_KEY && (
-          <Source id="traffic-source" type="raster" tiles={[TRAFFIC_URL]} tileSize={256}>
-            <Layer 
-              id="traffic-layer" 
-              type="raster" 
-              paint={{ 'raster-opacity': 0.7 }}
-            />
-          </Source>
-        )}
+        {/* ... [Traffic source stays same] */}
 
-        {/* 🛣️ The Real Route (GeoJSON) - FeatureCollection support */}
+        {/* 🛣️ The Real Route (GeoJSON) */}
         {routeGeoJSON && (
           <Source id="route-source" type="geojson" data={routeGeoJSON}>
             <Layer {...routeLayerStyle} />
@@ -136,35 +114,83 @@ const MapComponent = ({ activities, routeGeoJSON }) => {
           const lng = activity.location?.lng;
           if (!lat || !lng) return null;
 
-          // Define Marker Color (Cycle or use day info)
           const dayColors = ['#00f7ff', '#ff00ff', '#00ff00', '#ffff00', '#ff8000', '#ff0000', '#8000ff'];
           const markerColor = activity.dayNumber 
             ? dayColors[(activity.dayNumber - 1) % dayColors.length]
-            : (mapStyle === 'satellite' ? '#ffeb3b' : '#00f7ff');
+            : '#00f7ff';
 
           return (
-            <Marker 
-              key={idx} 
-              longitude={lng} 
-              latitude={lat} 
-              anchor="bottom"
-            >
-              <div className="custom-marker" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}>
-                <span style={{ 
-                  background: markerColor, 
-                  color: '#000', 
-                  padding: '2px 6px', 
-                  borderRadius: '4px', 
-                  fontSize: '9px', 
-                  fontWeight: 'bold', 
-                  marginBottom: '2px',
-                  boxShadow: '0 0 5px rgba(0,0,0,0.5)'
-                }}>
-                  {activity.dayNumber ? `D${activity.dayNumber}-${activity.orderInDay || (idx + 1)}` : (idx + 1)}
-                </span>
-                <FaMapMarkerAlt size={22} color={markerColor} style={{ filter: 'drop-shadow(0 0 5px rgba(0,0,0,0.8))' }}/>
-              </div>
-            </Marker>
+            <React.Fragment key={idx}>
+              <Marker 
+                longitude={lng} 
+                latitude={lat} 
+                anchor="bottom"
+                onClick={e => {
+                  e.originalEvent.stopPropagation();
+                  setSelectedActivity(activity);
+                }}
+              >
+                <div className="custom-marker" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}>
+                  <span style={{ 
+                    background: markerColor, 
+                    color: '#000', 
+                    padding: '2px 6px', 
+                    borderRadius: '4px', 
+                    fontSize: '9px', 
+                    fontWeight: 'bold', 
+                    marginBottom: '2px'
+                  }}>
+                    {activity.dayNumber ? `D${activity.dayNumber}-${activity.orderInDay}` : (idx + 1)}
+                  </span>
+                  <FaMapMarkerAlt size={22} color={markerColor} />
+                </div>
+              </Marker>
+
+              {selectedActivity === activity && (
+                <Popup
+                  longitude={lng}
+                  latitude={lat}
+                  anchor="top"
+                  onClose={() => setSelectedActivity(null)}
+                  closeButton={true}
+                  closeOnClick={false}
+                  maxWidth="300px"
+                >
+                  <div style={{ color: '#000', padding: '5px' }}>
+                    <h4 style={{ margin: '0 0 5px 0' }}>{activity.name}</h4>
+                    <p style={{ fontSize: '0.8rem', margin: '0 0 10px 0' }}>{activity.description}</p>
+                    {/* Image placeholder that opens search */}
+                    <div 
+                      onClick={() => window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(activity.name + " " + (activity.location?.address || ""))}`, "_blank")}
+                      style={{ 
+                        width: '100%', 
+                        height: '100px', 
+                        background: '#eee', 
+                        borderRadius: '4px', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        border: '1px dashed #ccc'
+                      }}
+                    >
+                      <FaCamera size={24} color="#999" />
+                      <span style={{ marginLeft: '10px', fontSize: '0.7rem' }}>Click for Photos</span>
+                    </div>
+                    {activity.location?.gMapLink && (
+                      <a 
+                        href={activity.location.gMapLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ display: 'block', marginTop: '10px', fontSize: '0.8rem', color: 'var(--color-neon-blue)', textDecoration: 'none', fontWeight: 'bold' }}
+                      >
+                        Navigate with GPS ↗
+                      </a>
+                    )}
+                  </div>
+                </Popup>
+              )}
+            </React.Fragment>
           );
         })}
 

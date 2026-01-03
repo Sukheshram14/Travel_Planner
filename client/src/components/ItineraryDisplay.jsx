@@ -41,34 +41,52 @@ const ItineraryDisplay = ({ itinerary, weather }) => {
         {itinerary.tripName || "Your Futuristic Plan 🚀"}
       </h2>
 
-      {/* Weather & Advice */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-        {itinerary.travelAdvice && (
-          <div style={{ background: 'rgba(0, 174, 255, 0.1)', padding: '1rem', borderRadius: '8px', borderLeft: '4px solid var(--color-blue)' }}>
-            <strong>🛫 Travel Advice:</strong> <br/> {itinerary.travelAdvice}
+      {/* Pro Sections: Stay & Famous Highlights */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1fr) minmax(200px, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
+        {itinerary.suggestedStay && (
+          <div style={{ background: 'rgba(255, 128, 0, 0.1)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(255, 128, 0, 0.3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <FaBed color="#ff8000" /> <strong style={{color: '#ff8000'}}>Recommended Stay:</strong>
+            </div>
+            <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#fff' }}>{itinerary.suggestedStay}</span>
+            <br/>
+            <a 
+              href={`https://www.google.com/search?q=${encodeURIComponent(itinerary.suggestedStay + " " + (itinerary.destination || ""))}`} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{ fontSize: '0.8rem', color: '#ff8000', textDecoration: 'none', borderBottom: '1px dashed #ff8000', marginTop: '5px', display: 'inline-block' }}
+            >
+              Check Availability ↗
+            </a>
           </div>
         )}
         
-        {weather && (
-           <div style={{ background: 'rgba(0, 255, 82, 0.1)', padding: '1rem', borderRadius: '8px', borderLeft: '4px solid var(--color-green)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-             <img src={weather.icon} alt="Weather" style={{ width: '48px' }} />
-             <div>
-               <strong>Forecast:</strong> <br/> {weather.condition}, {weather.temp_c}°C
-             </div>
-           </div>
+        {itinerary.famousThings && itinerary.famousThings.length > 0 && (
+          <div style={{ background: 'rgba(255, 235, 59, 0.1)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(255, 235, 59, 0.3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <FaCamera color="#fdd835" /> <strong style={{color: '#fdd835'}}>Local Specialties:</strong>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {itinerary.famousThings.map((thing, i) => (
+                <span key={i} style={{ background: 'rgba(255, 235, 59, 0.2)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.85rem', color: '#fff' }}>
+                   {thing}
+                </span>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 
       {/* Map Moved to Parent for Split-Screen Layout */}
 
       {/* Loop through Days */}
-      {itinerary.map((day) => (
+      {(itinerary.days || itinerary.itinerary || itinerary).map((day) => (
         <div key={day.dayNumber} className="day-container" style={styles.dayContainer}>
           
           {/* Day Header */}
           <div style={styles.dayHeader}>
-            <h3 style={{ margin: 0 }}>Day {day.dayNumber}</h3>
-            <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
+            <h3 style={{ margin: 0, color: 'var(--color-neon-blue)' }}>Day {day.dayNumber}</h3>
+            <span style={{ color: 'var(--color-text-muted)', fontSize: '1rem', fontWeight: '500' }}>
               {day.theme}
             </span>
           </div>
@@ -82,24 +100,31 @@ const ItineraryDisplay = ({ itinerary, weather }) => {
                 </div>
                 
                 <div style={{ flex: 1 }}>
-                  <div style={styles.timeSlot}>{activity.timeSlot}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={styles.timeSlot}>{activity.timeSlot}</div>
+                    {activity.estimatedCostINR !== undefined && (
+                      <div style={{ fontSize: '0.85rem', color: '#4caf50', fontWeight: 'bold' }}>
+                        Est: ₹{activity.estimatedCostINR}
+                      </div>
+                    )}
+                  </div>
+                  
                   <h4 style={styles.activityName}>{activity.name}</h4>
                   <p style={styles.description}>{activity.description}</p>
                   
                   {/* Google Maps Link */}
                   <a 
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(activity.searchQuery || activity.name)}`}
+                    href={activity.location?.gMapLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(activity.searchQuery || activity.name)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={styles.mapLink}
                   >
-                    <FaMapMarkerAlt /> View on Map
+                    <FaMapMarkerAlt /> Open in G-Maps
                   </a>
                 </div>
               </div>
             ))}
           </div>
-
         </div>
       ))}
     </div>

@@ -32,9 +32,10 @@ const tripController = require('../controllers/tripController');
 router.post('/', tripController.createTrip);
 
 // 2. Get a Trip
-// Route: GET http://localhost:5000/api/v1/trips/:id
-// ':id' is a URL parameter (e.g., trips/12345)
 router.get('/:id', tripController.getTrip);
+
+// 3. Get Nearby Fuel (Utility)
+router.get('/nearby/fuel', tripController.getNearbyFuel);
 
 module.exports = router;
 
