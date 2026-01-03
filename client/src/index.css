@@ -1,0 +1,107 @@
+/**
+ * ==========================================================================================================================================================
+ * 📚 SOFTWARE ENGINEERING: TEACH-AS-YOU-BUILD
+ * ==========================================================================================================================================================
+ * 
+ * 1. FILE PATH & HIERARCHY
+ * ------------------------
+ * Path: /client/src/index.css
+ * 
+ * Purpose:
+ * Redefined "Cool Revival" Design System.
+ * Focus: Tranquility, Creativity, Focus (Cyan, Blue-Green).
+ * 
+ * 2. DAY / NIGHT MODE
+ * -----------------
+ * We use CSS Variables and a [data-theme="light"] attribute on the <body>.
+ * 
+ * ==========================================================================================================================================================
+ */
+
+:root {
+    /* 🎨 Palette: "Cool Revival" - The Foundation */
+    --color-cyan: #00FFFF;
+    /* Tranquility & Creativity (Highlights) */
+    --color-blue: #00AEFF;
+    /* Focus & Trust (Primary) */
+    --color-teal: #00DE94;
+    /* Balance (Secondary/Success) */
+    --color-green: #00FF52;
+    /* Vibrancy (Accents) */
+
+    /* Default (Dark Mode - "Night") */
+    --bg-main: #0F172A;
+    /* Deep Blue-Grey (Not pitch black) */
+    --bg-card: #1E293B;
+    /* Lighter Blue-Grey */
+    --text-main: #F1F5F9;
+    /* Off-white */
+    --text-muted: #94A3B8;
+    /* Muted Blue-Grey */
+
+    --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+}
+
+/* ☀️ Light Mode Overrides */
+[data-theme="light"] {
+    --bg-main: #F8FAFC;
+    /* Very light grey-blue */
+    --bg-card: #FFFFFF;
+    /* Pure white */
+    --text-main: #0F172A;
+    /* Dark text */
+    --text-muted: #64748B;
+
+    --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Global Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    line-height: 1.6;
+    transition: background-color 0.3s, color 0.3s;
+    /* Smooth Mode Switch */
+}
+
+/* Components */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+.card {
+    background: var(--bg-card);
+    padding: 2rem;
+    border-radius: 16px;
+    box-shadow: var(--shadow-card);
+    border: 1px solid rgba(0, 255, 255, 0.1);
+    /* Subtle Cyan border */
+}
+
+.btn {
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--color-blue), var(--color-cyan));
+    color: #000;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px -10px var(--color-cyan);
+}
