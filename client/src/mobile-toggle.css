@@ -1,0 +1,25 @@
+/* Mobile-specific styles */
+@media (max-width: 768px) {
+
+    /* Desktop split-view becomes mobile toggle view */
+    .planner-page>div {
+        width: 100% !important;
+    }
+}
+
+/* Desktop: Override to show both panels side-by-side */
+@media (min-width: 769px) {
+
+    .sidebar,
+    .map-panel {
+        display: block !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+
+    .sidebar.hidden,
+    .map-panel.hidden {
+        display: block !important;
+        /* Force show on desktop */
+    }
+}

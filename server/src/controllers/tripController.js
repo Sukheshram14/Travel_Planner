@@ -25,6 +25,7 @@ const weatherService = require('../services/weatherService');
 const routingService = require('../services/routingService'); // 🚩 Import Routing
 const Trip = require('../models/Trip');
 const { generateItinerary } = require('../services/geminiService');
+const logger = require('../utils/logger'); // 📊 Performance Logger
 
 /**
  * createTrip
@@ -37,37 +38,61 @@ const { generateItinerary } = require('../services/geminiService');
  * 4. We send it back to Frontend.
  */
 const createTrip = async (req, res) => {
-  try {
-    const { destination, startDate, endDate, budget, travelers, interests } = req.body;
+  const globalLabel = "Full Trip Generation Process";
+  logger.start(globalLabel);
 
-    // 1. Calculate Duration (Logic)
-    // We need to know how many days to ask the AI for.
+  try {
+    const { 
+      destination, 
+      startDate, 
+      endDate, 
+      budget, 
+      travelers, 
+      interests,
+      travelMode = 'car',
+      vehicleType = 'passenger'
+    } = req.body;
+
+    const routingOptions = {
+        travelMode: req.body.travelMode || 'car',
+        vehicleEngineType: req.body.vehicleEngineType || 'combustion',
+        // Optional advanced parameters (future proofing)
+        vehicleMaxSpeed: req.body.vehicleMaxSpeed,
+        vehicleWeight: req.body.vehicleWeight,
+        vehicleLength: req.body.vehicleLength,
+        vehicleWidth: req.body.vehicleWidth,
+        vehicleHeight: req.body.vehicleHeight
+    };
+
+    // 1. Calculate Duration
     const start = new Date(startDate);
     const end = new Date(endDate);
-    const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1; // +1 to include start day
+    const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
 
-    console.log(`🤖 Generative AI: Planning ${days} days in ${destination}...`);
-
-    // 🌟 2A. Pre-planning: Get Coords for Origin & Destination
+    // 🌟 2A. Pre-planning
+    logger.start("Ph1: Origin/Dest Geocoding");
     const originCoords = req.body.origin ? await geoService.getCoordinates(req.body.origin) : null;
     const destCoords = await geoService.getCoordinates(destination);
+    logger.end("Ph1: Origin/Dest Geocoding");
 
-    // 🌟 2B. Routing: Get the Driving Path (If origin exists)
+    // 🌟 2B. Routing: Initial Path
     let initialRoute = null;
     if (originCoords && destCoords) {
-      console.log(`🛣️ Calculating Initial Route: ${originCoords.formatted} -> ${destCoords.formatted}`);
-      initialRoute = await routingService.getRoute(originCoords, destCoords);
+      logger.start("Ph2: Initial Route Calculation");
+      initialRoute = await routingService.getRoute(originCoords, destCoords, routingOptions);
+      logger.end("Ph2: Initial Route Calculation");
     }
 
     // 🌟 2. Weather & Real Places (Parallel for Speed)
-    // FIX: Pass lat,lng to weather API for 100% accuracy (avoids 400 errors for vague names)
+    logger.start("Ph3: Weather & RAG Context Discovery");
     const [weatherData, realPlaces] = await Promise.all([
       weatherService.getForecast(`${destCoords.lat},${destCoords.lng}`),
       geoService.getTouristPlaces(destCoords.lat, destCoords.lng)
     ]);
-    console.log(`✅ Found ${realPlaces.length} real places.`);
+    logger.end("Ph3: Weather & RAG Context Discovery");
 
     // 3. Call the AI Service (The "Brain") with Real Data Context
+    logger.start("Ph4: Gemini AI Generation");
     const aiResponse = await generateItinerary({
       origin: req.body.origin,
       destination: destCoords ? destCoords.formatted : destination,
@@ -77,6 +102,7 @@ const createTrip = async (req, res) => {
       interests,
       realPlaces // <--- PASSING REAL DATA TO AI
     });
+    logger.end("Ph4: Gemini AI Generation");
 
     // Attach our Real Data to the AI response
     aiResponse.route = initialRoute; 
@@ -85,11 +111,10 @@ const createTrip = async (req, res) => {
     if (destCoords) aiResponse.destinationLocation = destCoords;
 
     // 🌟 4. Hydration (Updated for RAG & High-Accuracy Search)
+    logger.start("Ph5: Itinerary Hydration (Geocoding Activities)");
     const officialDestName = destCoords ? destCoords.formatted : destination;
-    console.log(`🗺️ Hydrating Itinerary Locations for ${officialDestName}...`);
     
     for (const day of aiResponse.days) {
-      console.log(`--- Day ${day.dayNumber}: ${day.theme} ---`);
       let activityOrder = 1;
       for (const activity of day.activities) {
         // Tag activity with its position
@@ -97,7 +122,6 @@ const createTrip = async (req, res) => {
         activity.orderInDay = activityOrder++;
         
         // Strategy A: Check if it's one of our Pre-fetched Real Places (Best Quality)
-        // 💡 Better Matching: Ensure the name match is significant (not just "Arrival")
         const trustedPlace = realPlaces.find(p => {
             const cleanName = activity.name.toLowerCase();
             const pName = p.name.toLowerCase();
@@ -106,49 +130,46 @@ const createTrip = async (req, res) => {
         
         if (trustedPlace) {
             activity.location = { lat: trustedPlace.lat, lng: trustedPlace.lng, address: trustedPlace.address };
-            console.log(`🎯 RAG Hit: Found "${activity.name}" in local verified list.`);
         } else {
             // Strategy B: Fallback to Geocoding Search
-            const query = activity.searchQuery || activity.name; 
-            console.log(`🔍 Searching: "${query}" (Leashed to ${officialDestName})...`);
-            
-            const coords = await geoService.getCoordinates(query, destCoords.lat, destCoords.lng);
-            
-            if (coords) {
-              // 💡 Generate Google Maps Deep Link
-              const gMapLink = `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`;
-              activity.location = { 
-                lat: coords.lat, 
-                lng: coords.lng, 
-                address: coords.formatted,
-                gMapLink 
-              };
-              console.log(`✅ Located: ${coords.formatted}`);
+            const query = (activity.searchQuery || activity.name || "").trim(); 
+            const genericTerms = ["departure", "arrival", "check-in", "check-out", "leisure", "relaxation", "rest", "shopping", "lunch", "dinner", "breakfast"];
+            const isGeneric = genericTerms.some(term => query.toLowerCase().includes(term));
+
+            if (isGeneric || query.length < 3) {
+              logger.info(`⏩ Skipping geocoding for generic activity: "${query}"`);
+              // Use destination center for generic activities if no better option
+              activity.location = { lat: destCoords.lat, lng: destCoords.lng, address: "Local Area" };
             } else {
-              console.warn(`⚠️ Not Found: Could not locate "${query}" within 50km.`);
+              const coords = await geoService.getCoordinates(query, destCoords.lat, destCoords.lng);
+              if (coords) {
+                activity.location = { lat: coords.lat, lng: coords.lng, address: coords.formatted };
+              }
             }
         }
       }
     }
+    logger.end("Ph5: Itinerary Hydration (Geocoding Activities)");
 
     // 3. Save to Database (The "Memory")
+    logger.start("Ph6: Database Save");
     const newTrip = new Trip({
+      origin: req.body.origin || null, // [NEW] Save origin for route visualization
       destination,
       startDate,
       endDate,
       budget,
       travelers,
-      famousThings: aiResponse.famousThings, // 💡 New Pro Field
-      suggestedStay: aiResponse.suggestedStay, // 💡 New Pro Field
       itinerary: aiResponse.days, // Map AI "days" to Schema "days"
-      isGenerated: true
+      isGenerated: true,
+      user: req.user ? req.user._id : null // [NEW] Attach User ID if logged in
     });
 
     await newTrip.save();
-    console.log(`✅ Trip saved with ID: ${newTrip._id}`);
+    logger.end("Ph6: Database Save");
 
     // 4. Calculate Optimized Full Route (Day-Aware Hybrid)
-    // 💡 NEW LOGIC: Calculate Route PER DAY to solve the 'Zigzag' error.
+    logger.start("Ph7: Advanced Road Path Calculation (ORS)");
     const routeFeatures = [];
 
     // Add Initial Travel Route (if exists)
@@ -161,60 +182,55 @@ const createTrip = async (req, res) => {
     }
     
     for (let i = 0; i < newTrip.itinerary.length; i++) {
-      const day = newTrip.itinerary[i];
-      const dayCoords = [];
-
-      // Every day starts from the Origin (or the last location of previous day)
-      // For now, let's assume users start from Origin daily if provided
-      if (originCoords) {
-        dayCoords.push({ lat: originCoords.lat, lng: originCoords.lng });
-      }
-
-      day.activities.forEach(act => {
-        if (act.location?.lat && act.location?.lng) {
-          dayCoords.push({ lat: act.location.lat, lng: act.location.lng });
-        }
-      });
-
-      if (dayCoords.length >= 2) {
-        // 1. Optimize sequence for THIS day only
-        const optimizedDay = routingService.getOptimizedSequence(dayCoords);
+        const day = newTrip.itinerary[i];
+        const dayCoords = [];
         
-        // 2. Fetch road path for THIS day
-        const dayGeometry = await routingService.getFullRoute(optimizedDay);
+        // 🚩 CRITICAL FIX: Do NOT add origin to daily routes
+        // Each day should only show routes WITHIN the destination city
+        // The initial travel route (origin → destination) is already shown as Day 0 (white route)
         
-        if (dayGeometry) {
-          const dayColors = ['#00f7ff', '#ff00ff', '#00ff00', '#ffff00', '#ff8000', '#ff0000', '#8000ff'];
-          routeFeatures.push({
-            type: 'Feature',
-            properties: { 
-                day: i + 1,
-                color: dayColors[i % dayColors.length]
-            },
-            geometry: dayGeometry
-          });
+        day.activities.forEach(act => {
+            if (act.location?.lat && act.location?.lng) {
+                dayCoords.push({ lat: act.location.lat, lng: act.location.lng });
+            }
+        });
+
+        if (dayCoords.length >= 2) {
+            logger.start(`Ph7.1: TomTom Optimization (Day ${i + 1})`);
+            const optimizedDay = await routingService.getOptimizedSequence(dayCoords);
+            logger.end(`Ph7.1: TomTom Optimization (Day ${i + 1})`);
+            
+            const dayGeometry = await routingService.getFullRoute(optimizedDay, routingOptions);
+            if (dayGeometry) {
+                const dayColors = ['#00f7ff', '#ff00ff', '#00ff00', '#ffff00', '#ff8000', '#ff0000', '#8000ff'];
+                routeFeatures.push({
+                    type: 'Feature',
+                    properties: { day: i + 1, color: dayColors[i % dayColors.length] },
+                    geometry: dayGeometry
+                });
+            }
         }
-      }
     }
 
-    // Combine all day-routes into a FeatureCollection
     const routeGeoJSON = {
       type: 'FeatureCollection',
       features: routeFeatures
     };
+    logger.end("Ph7: Advanced Road Path Calculation (ORS)");
 
-    // 5. Send Response
+    logger.end(globalLabel);
+
     res.status(201).json({
       status: 'success',
       data: {
         trip: newTrip,
         weather: weatherData,
-        routeGeoJSON: routeGeoJSON // 🌟 This provides the optimized Day-Aware path
+        routeGeoJSON: routeGeoJSON
       }
     });
 
   } catch (error) {
-    console.error('❌ Controller Error:', error);
+    logger.error("createTrip Global Catch", error);
     res.status(500).json({
       status: 'error',
       message: error.message || 'Something went wrong while planning your trip.'
@@ -229,23 +245,50 @@ const createTrip = async (req, res) => {
  * Used when: User refreshes the page or clicks a "My Trips" link.
  */
 const getTrip = async (req, res) => {
+  const globalLabel = `Retrieve Trip: ${req.params.id}`;
+  logger.start(globalLabel);
+
   try {
     const { id } = req.params;
     const trip = await Trip.findById(id);
 
     if (!trip) {
+      logger.end(globalLabel);
       return res.status(404).json({ status: 'fail', message: 'Trip not found' });
     }
 
     // Calculate route on the fly for the saved trip
+    logger.start("Saved Trip: Advanced Road Path Calculation");
     const routeFeatures = [];
     
+    // [NEW] Add Initial Travel Route (Origin → Destination) if origin exists
+    if (trip.origin && trip.destination) {
+      try {
+        logger.start("Saved Trip: Initial Route (Origin → Destination)");
+        const originCoords = await geoService.getCoordinates(trip.origin);
+        const destCoords = await geoService.getCoordinates(trip.destination);
+        
+        if (originCoords && destCoords) {
+          const initialRoute = await routingService.getRoute(originCoords, destCoords);
+          if (initialRoute) {
+            routeFeatures.push({
+              type: 'Feature',
+              properties: { day: 0, color: '#ffffff' }, // White for travel route
+              geometry: initialRoute
+            });
+          }
+        }
+        logger.end("Saved Trip: Initial Route (Origin → Destination)");
+      } catch (err) {
+        logger.error("Failed to generate initial route", err);
+      }
+    }
+    
+    // Daily routes within destination
     for (let i = 0; i < trip.itinerary.length; i++) {
       const day = trip.itinerary[i];
       const dayCoords = [];
 
-      // Note: For saved trips, we'll focus on the itinerary points 
-      // as we don't have the original originCoords stored in the Trip model yet.
       day.activities.forEach(act => {
         if (act.location?.lat && act.location?.lng) {
           dayCoords.push({ lat: act.location.lat, lng: act.location.lng });
@@ -253,7 +296,10 @@ const getTrip = async (req, res) => {
       });
 
       if (dayCoords.length >= 2) {
-        const optimizedDay = routingService.getOptimizedSequence(dayCoords);
+        logger.start(`Saved Trip: TomTom Optimization (Day ${i + 1})`);
+        const optimizedDay = await routingService.getOptimizedSequence(dayCoords);
+        logger.end(`Saved Trip: TomTom Optimization (Day ${i + 1})`);
+        
         const dayGeometry = await routingService.getFullRoute(optimizedDay);
         
         if (dayGeometry) {
@@ -274,6 +320,9 @@ const getTrip = async (req, res) => {
       type: 'FeatureCollection',
       features: routeFeatures
     };
+    logger.end("Saved Trip: Advanced Road Path Calculation");
+
+    logger.end(globalLabel);
 
     res.status(200).json({
       status: 'success',
@@ -284,33 +333,72 @@ const getTrip = async (req, res) => {
     });
 
   } catch (error) {
+    logger.error("getTrip Global Catch", error);
     res.status(500).json({ status: 'error', message: error.message });
   }
 };
 
 /**
- * getNearbyFuel
- * -------------
- * Endpoint to fetch nearby fuel stations based on map center.
+ * getMyTrips
+ * ----------
+ * Purpose: Retrieve all trips for the authenticated user.
  */
-const getNearbyFuel = async (req, res) => {
-  const { lat, lng } = req.query;
-  if (!lat || !lng) {
-    return res.status(400).json({ error: "Lat/Lng required" });
-  }
+const getMyTrips = async (req, res) => {
+    try {
+        // req.user is attached by authMiddleware
+        const trips = await Trip.find({ user: req.user._id }).sort({ createdAt: -1 });
 
-  try {
-    const fuelStations = await geoService.getNearbyFuelStations(lat, lng);
-    res.json(fuelStations);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+        res.status(200).json({
+            status: 'success',
+            results: trips.length,
+            data: trips
+        });
+    } catch (error) {
+        logger.error("getMyTrips Error", error);
+        res.status(500).json({ status: 'error', message: 'Failed to fetch your trips' });
+    }
+};
+
+/**
+ * deleteTrip
+ * ----------
+ * Purpose: Delete a specific trip (if owned by user).
+ */
+const deleteTrip = async (req, res) => {
+    try {
+        const trip = await Trip.findById(req.params.id);
+
+        if (!trip) {
+            return res.status(404).json({ status: 'fail', message: 'Trip not found' });
+        }
+
+        // Check ownership
+        // Note: trip.user is an ObjectId, req.user._id is an ObjectId.
+        // We use .equals() or convert to string for comparison.
+        if (trip.user && !trip.user.equals(req.user._id)) {
+            return res.status(403).json({ 
+                status: 'fail', 
+                message: 'You do not have permission to delete this trip' 
+            });
+        }
+
+        await Trip.findByIdAndDelete(req.params.id);
+
+        res.status(204).json({
+            status: 'success',
+            data: null
+        });
+    } catch (error) {
+        logger.error("deleteTrip Error", error);
+        res.status(500).json({ status: 'error', message: 'Failed to delete trip' });
+    }
 };
 
 module.exports = {
   createTrip,
   getTrip,
-  getNearbyFuel
+  getMyTrips, // [NEW]
+  deleteTrip  // [NEW]
 };
 
 /**

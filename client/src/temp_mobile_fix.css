@@ -1,0 +1,23 @@
+/* Mobile Responsiveness - Enhanced */
+/* ... (Updated content to reduce card padding) ... */
+
+@media (max-width: 768px) {
+    /* ... existing styles ... */
+
+    /* [NEW] Reduce Card Padding/Height */
+    .card,
+    .landing-page .card {
+        padding: 1.5rem !important;
+        /* Reduced from 2rem or default */
+        min-height: auto !important;
+        /* Prevent excessive height */
+    }
+
+    .featureCard h3 {
+        margin: 0.5rem 0 !important;
+    }
+
+    .featureCard p {
+        margin-bottom: 0 !important;
+    }
+}

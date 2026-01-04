@@ -1,0 +1,259 @@
+/* Mobile Responsiveness - Enhanced */
+
+/* Tablet and below */
+@media (max-width: 1024px) {
+  .planner-page {
+    flex-direction: column !important;
+  }
+
+  .sidebar {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-right: none !important;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  .map-panel {
+    height: 50vh !important;
+    width: 100% !important;
+    min-height: 400px;
+  }
+}
+
+/* Mobile phones */
+@media (max-width: 768px) {
+
+  /* Layout adjustments */
+  .planner-page {
+    flex-direction: column !important;
+    height: auto !important;
+  }
+
+  .sidebar {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-right: none !important;
+    padding: 1rem !important;
+    max-height: none;
+  }
+
+  .map-panel {
+    height: 60vh !important;
+    width: 100% !important;
+    min-height: 400px;
+    position: sticky;
+    top: 0;
+  }
+
+  /* Typography */
+  h1 {
+    font-size: 1.75rem !important;
+  }
+
+  h2 {
+    font-size: 1.5rem !important;
+  }
+
+  h3 {
+    font-size: 1.25rem !important;
+  }
+
+  h4 {
+    font-size: 1.1rem !important;
+  }
+
+  /* Touch-friendly buttons */
+  button,
+  .btn,
+  a.btn {
+    min-height: 48px !important;
+    min-width: 48px !important;
+    font-size: 16px !important;
+    padding: 12px 16px !important;
+  }
+
+  /* Form inputs */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+    padding: 14px !important;
+    min-height: 48px !important;
+  }
+
+  /* Cards */
+  .card {
+    padding: 1rem !important;
+    margin-bottom: 1rem !important;
+  }
+
+  /* Grid layouts */
+  .grid,
+  [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Navbar adjustments */
+  nav {
+    padding: 0.75rem 1rem !important;
+  }
+
+  nav button,
+  nav a {
+    font-size: 14px !important;
+    padding: 8px 12px !important;
+  }
+
+  /* Itinerary display */
+  .itinerary-timeline {
+    padding: 0 !important;
+  }
+
+  .day-container {
+    padding-left: 1rem !important;
+  }
+
+  .activities-list {
+    gap: 0.75rem !important;
+  }
+
+  /* Booking buttons */
+  .bookingButtons {
+    flex-direction: column !important;
+  }
+
+  .bookingButtons button {
+    width: 100% !important;
+  }
+
+  /* Map controls */
+  .leaflet-control-container {
+    zoom: 1.2;
+  }
+
+  /* Hide less important elements on mobile */
+  .theme-toggle {
+    display: none !important;
+  }
+}
+
+/* Extra small phones and narrow devices */
+@media (max-width: 500px) {
+  h1 {
+    font-size: 1.25rem !important;
+  }
+
+  .sidebar {
+    padding: 0.75rem !important;
+  }
+
+  /* Stack specific containers only */
+  .itinerary-summary,
+  .bookingButtons,
+  .userSectionWrapper {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.75rem !important;
+  }
+
+  /* Navbar specific tweaks for very narrow screens */
+  .navbar {
+    padding: 0.5rem 1rem !important;
+  }
+}
+
+/* 🍔 Navbar Mobile Support (Consolidated) */
+@media (max-width: 768px) {
+  .navbar-toggle {
+    display: block !important;
+  }
+
+  .navbar-links {
+    display: none !important;
+  }
+
+  .navbar-links.open {
+    display: flex !important;
+    flex-direction: column !important;
+    position: fixed !important;
+    top: 60px !important;
+    left: 0 !important;
+    width: 100% !important;
+    background: rgba(15, 23, 42, 0.98) !important;
+    padding: 2rem !important;
+    z-index: 3000 !important;
+  }
+
+  /* 🏔️ PlannerPage Mobile Adjustments */
+  .planner-page {
+    /* Push content down so it's not hidden UNDER the fixed navbar */
+    padding-top: 60px !important;
+  }
+
+  /* 📱 Class-based visibility for reliable toggling */
+  .sidebar.hidden,
+  .map-panel.hidden {
+    display: none !important;
+  }
+
+  .sidebar.active {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .map-panel.active {
+    display: block !important;
+    width: 100% !important;
+    height: calc(100vh - 60px) !important;
+    min-height: calc(100vh - 60px) !important;
+  }
+
+  /* 📍 Move "View Map" toggle to bottom-center floating button */
+  .mobile-toggle {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    position: fixed !important;
+    bottom: 30px !important;
+    left: 50% !important;
+    /* Center horizontally */
+    transform: translateX(-50%) !important;
+    /* Center alignment fix */
+    right: auto !important;
+    /* Override previous right positioning */
+    z-index: 9999 !important;
+    border-radius: 50px !important;
+    padding: 0 1.5rem !important;
+    height: 56px !important;
+    box-shadow: 0 8px 32px rgba(0, 247, 255, 0.4) !important;
+    border: 2px solid #00f7ff !important;
+    background: #0f172a !important;
+    color: #00f7ff !important;
+    font-size: 1rem !important;
+    font-weight: bold !important;
+    cursor: pointer !important;
+    animation: slideUp 0.3s ease-out;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* 💻 Desktop Hide */
+@media (min-width: 769px) {
+  .mobile-toggle {
+    display: none !important;
+  }
+}

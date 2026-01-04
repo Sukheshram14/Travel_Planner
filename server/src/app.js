@@ -80,7 +80,11 @@ const createApplication = () => {
 
   // Mount Feature Routes
   const tripRoutes = require('./routes/tripRoutes');
+  // [NEW] Authentication Routes
+  const authRoutes = require('./routes/authRoutes');
+  
   app.use('/api/v1/trips', tripRoutes);
+  app.use('/api/v1/users', authRoutes); // Auth base: /api/v1/users/signup
 
   return app;
 };

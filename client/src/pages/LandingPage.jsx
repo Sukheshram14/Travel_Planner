@@ -48,9 +48,14 @@ const LandingPage = () => {
           AI-powered itineraries that adapt to your style, budget, and traffic.
         </p>
         
-        <button className="btn btn-primary" onClick={handleStart} style={styles.ctaButton}>
-          Start Planning <FaRocket style={{ marginLeft: '10px' }} />
-        </button>
+        <div style={styles.buttonGroup}>
+          <button className="btn btn-primary" onClick={handleStart} style={styles.ctaButton}>
+            Start Planning <FaRocket style={{ marginLeft: '10px' }} />
+          </button>
+          <button onClick={() => navigate('/login')} style={styles.secondaryButton}>
+            Sign In / My Trips
+          </button>
+        </div>
       </header>
 
       {/* Features Grid */}
@@ -99,6 +104,36 @@ const styles = {
     maxWidth: '600px',
     marginLeft: 'auto',
     marginRight: 'auto',
+  },
+  buttonGroup: {
+    display: 'flex',
+    gap: '1rem',
+    justifyContent: 'center',
+    marginTop: '2rem',
+  },
+  ctaButton: {
+    padding: '1rem 2rem',
+    fontSize: '1.1rem',
+    fontWeight: 'bold',
+    borderRadius: '12px',
+    background: 'linear-gradient(90deg, #00f7ff, #00ff9d)',
+    color: '#000',
+    border: 'none',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    transition: 'transform 0.1s',
+  },
+  secondaryButton: {
+    padding: '1rem 2rem',
+    fontSize: '1rem', // Slightly smaller
+    fontWeight: '600',
+    borderRadius: '12px',
+    background: 'rgba(255, 255, 255, 0.05)', // Glassy background instead of outline
+    color: '#fff', // White text
+    border: '1px solid rgba(255, 255, 255, 0.1)', // Very subtle border
+    cursor: 'pointer',
+    transition: 'all 0.2s',
   },
   features: {
     display: 'grid',

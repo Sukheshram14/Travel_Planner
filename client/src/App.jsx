@@ -27,21 +27,29 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import PlannerPage from './pages/PlannerPage';
+import AuthPage from './pages/AuthPage'; // [NEW]
+import DashboardPage from './pages/DashboardPage'; // [NEW]
+import Navbar from './components/Navbar'; // [NEW]
 
 function App() {
   return (
     <Router>
       <div className="app-layout">
-        {/* 
-          Navigation Bar could go here (Global) 
-        */}
+        {/* Navigation Bar (Global) */}
+        <Navbar />
         
         <Routes>
           {/* Route: When URL is '/', show LandingPage */}
           <Route path="/" element={<LandingPage />} />
           
           {/* Route: When URL is '/plan', show PlannerPage */}
-           <Route path="/plan" element={<PlannerPage />} /> 
+          <Route path="/plan" element={<PlannerPage />} /> 
+          
+          {/* Route: Login / Signup */}
+          <Route path="/login" element={<AuthPage />} />
+
+          {/* Route: User Dashboard */}
+          <Route path="/dashboard" element={<DashboardPage />} />
         </Routes>
       </div>
     </Router>

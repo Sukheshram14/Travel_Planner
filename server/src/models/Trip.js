@@ -36,50 +36,47 @@ const mongoose = require('mongoose');
 
 const ActivitySchema = new mongoose.Schema({
   name: { type: String, required: true }, // e.g., "Eiffel Tower"
-  type: { type: String, default: 'attraction' }, 
+  type: { type: String, default: 'attraction' }, // 💡 RELAXED: No enum to prevent AI crashes
   location: {
     lat: Number,
     lng: Number,
-    address: String,
-    gMapLink: String // 💡 Deep link for navigation
+    address: String
   },
-  timeSlot: String,
+  timeSlot: String, // e.g., "10:00 AM - 12:00 PM"
   description: String,
-  estimatedCostINR: Number, // 💡 Renamed for local clarity
-  dayNumber: Number,   
-  orderInDay: Number   
+  estimatedCost: Number,
+  dayNumber: Number,   // 💡 Added for better map ordering
+  orderInDay: Number   // 💡 Added for better map ordering
 });
 
 const DaySchema = new mongoose.Schema({
-  dayNumber: { type: Number, required: true },
-  theme: String,
-  activities: [ActivitySchema]
+  dayNumber: { type: Number, required: true }, // Day 1, Day 2...
+  theme: String, // e.g., "Historic Paris"
+  activities: [ActivitySchema] // 💡 Nested Schema (Array of Activities)
 });
 
 const TripSchema = new mongoose.Schema({
   // Metadata
-  userId: { 
-    type: String, 
-    required: false, 
-    index: true 
+  user: { 
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false, // For now, we allow guest users
+    index: true // 💡 TEACH: rapid search. Like the index in a textbook, makes finding trips by User fast.
   },
   
-  // User Inputs
+  // User Inputs (The "Brief")
+  origin: { type: String, required: false }, // Starting point (optional for now)
   destination: { type: String, required: true },
   startDate: { type: Date, required: true },
   endDate: { type: Date, required: true },
   budget: { type: String, enum: ['cheap', 'moderate', 'luxury'], required: true },
   travelers: { type: String, enum: ['solo', 'couple', 'family', 'friends'], default: 'solo' },
   
-  // Pro Fields
-  famousThings: [String],
-  suggestedStay: String,
-  
-  // The Generated Itinerary
+  // The Generated Itinerary (The "Result")
   itinerary: [DaySchema],
   
   // Status
-  isGenerated: { type: Boolean, default: false }, 
+  isGenerated: { type: Boolean, default: false }, // Has the AI finished?
   createdAt: { type: Date, default: Date.now }
 });
 

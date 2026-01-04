@@ -11,59 +11,41 @@
  * Redefined "Cool Revival" Design System.
  * Focus: Tranquility, Creativity, Focus (Cyan, Blue-Green).
  * 
- * 2. DAY / NIGHT MODE
- * -----------------
- * We use CSS Variables and a [data-theme="light"] attribute on the <body>.
- * 
  * ==========================================================================================================================================================
  */
 
-:root {
-    /* 🎨 Palette: "Cool Revival" - The Foundation */
-    --color-cyan: #00FFFF;
-    /* Tranquility & Creativity (Highlights) */
-    --color-blue: #00AEFF;
-    /* Focus & Trust (Primary) */
-    --color-teal: #00DE94;
-    /* Balance (Secondary/Success) */
-    --color-green: #00FF52;
-    /* Vibrancy (Accents) */
+@import './mobile-responsive.css';
+@import './mobile-toggle.css';
 
-    /* Default (Dark Mode - "Night") */
+:root {
+    --color-cyan: #00FFFF;
+    --color-blue: #00AEFF;
+    --color-teal: #00DE94;
+    --color-green: #00FF52;
+    --color-neon-blue: #00f7ff;
+    --color-neon-cyan: #00ffff;
+
     --bg-main: #0F172A;
-    /* Deep Blue-Grey (Not pitch black) */
     --bg-card: #1E293B;
-    /* Lighter Blue-Grey */
     --text-main: #F1F5F9;
-    /* Off-white */
     --text-muted: #94A3B8;
-    /* Muted Blue-Grey */
 
     --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
 
-    /* 🌈 Standard Semantic Aliases (Used in components) */
     --color-bg: var(--bg-main);
     --color-card: var(--bg-card);
     --color-text: var(--text-main);
     --color-border: rgba(0, 255, 255, 0.2);
-    --color-neon-blue: var(--color-blue);
-    --color-neon-cyan: var(--color-cyan);
 }
 
-/* ☀️ Light Mode Overrides */
 [data-theme="light"] {
     --bg-main: #F8FAFC;
-    /* Very light grey-blue */
     --bg-card: #FFFFFF;
-    /* Pure white */
     --text-main: #0F172A;
-    /* Dark text */
     --text-muted: #64748B;
-
     --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
-/* Global Reset */
 * {
     margin: 0;
     padding: 0;
@@ -76,10 +58,8 @@ body {
     color: var(--text-main);
     line-height: 1.6;
     transition: background-color 0.3s, color 0.3s;
-    /* Smooth Mode Switch */
 }
 
-/* Components */
 .container {
     max-width: 1200px;
     margin: 0 auto;
@@ -92,7 +72,6 @@ body {
     border-radius: 16px;
     box-shadow: var(--shadow-card);
     border: 1px solid rgba(0, 255, 255, 0.1);
-    /* Subtle Cyan border */
 }
 
 .btn {
@@ -112,4 +91,205 @@ body {
 .btn-primary:hover {
     transform: translateY(-2px);
     box-shadow: 0 10px 20px -10px var(--color-cyan);
+}
+
+/* 📍 Premium Google-Style Markers */
+.premium-marker {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.premium-marker:hover {
+    transform: scale(1.25);
+    z-index: 1000;
+}
+
+.marker-dot {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 24px;
+    background: var(--marker-color);
+    border-radius: 50% 50% 50% 0;
+    transform: translateX(-50%) rotate(-45deg);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+}
+
+.marker-label {
+    transform: rotate(45deg);
+    font-size: 10px;
+    font-weight: 800;
+    color: #000;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.premium-marker.show-label .marker-label,
+.premium-marker:hover .marker-label {
+    opacity: 1;
+}
+
+.marker-shadow {
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 12px;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 50%;
+    filter: blur(2px);
+}
+
+/* 🌟 POI Marker Styles */
+.poi-marker {
+    width: 28px;
+    height: 28px;
+    background: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--poi-color);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+}
+
+.poi-marker:hover {
+    transform: scale(1.2);
+    box-shadow: 0 0 15px var(--poi-color);
+}
+
+.poi-icon {
+    font-size: 14px;
+    color: var(--poi-color);
+}
+
+/* 🔍 Map POI Chips */
+/* 🔍 Map POI Chips */
+.map-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    /* Larger hit area */
+    background: rgba(30, 41, 59, 0.85);
+    /* Dark Slate, high opacity */
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    /* Higher contrast border */
+    border-radius: 50px;
+    /* Full pill shape */
+    color: #f1f5f9;
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    /* CRITICAL: Prevent shrinking/squashing */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    /* Lift them off the map */
+}
+
+.map-chip:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: #fff;
+    transform: translateY(-1px);
+}
+
+.map-chip.active {
+    background: var(--color-neon-blue);
+    /* Solid Neon Blue */
+    color: #000;
+    /* Black text for max contrast */
+    border-color: var(--color-neon-blue);
+    box-shadow: 0 0 15px rgba(0, 247, 255, 0.4);
+}
+
+.poi-popup {
+    padding: 8px;
+    color: #0f172a;
+}
+
+/* 🌊 Modern Scrollbar */
+/* For Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+    /* Height for horizontal scrollbars */
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    /* Subtle visible grey */
+    border-radius: 10px;
+    transition: background 0.3s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-neon-blue);
+    /* Neon on hover */
+}
+
+/* Utility Class for specific containers to force this style */
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) rgba(15, 23, 42, 0.4);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.4);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-neon-blue);
+}
+
+/* 🏔️ Card Hover Effects */
+.card:hover {
+    transform: translateY(-5px);
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-color: rgba(0, 247, 255, 0.3) !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* 🍔 Sidebar Toggle Animation */
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.sidebar.active {
+    animation: slideInLeft 0.5s ease;
 }

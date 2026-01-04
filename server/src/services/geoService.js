@@ -17,44 +17,41 @@
  * ==========================================================================================================================================================
  */
 
-const axios = require('axios');
-
-const GEOAPIFY_KEY = process.env.GEOAPIFY_API_KEY;
+const tomtomGeocodingService = require('./tomtomGeocodingService');
+const tomtomSearchService = require('./tomtomSearchService');
+const logger = require('../utils/logger');
 
 /**
  * getCoordinates
  * --------------
- * @param {string} locationName - e.g., "Munnar, Kerala"
- * @param {number} proximityLat - [Optional] Bias search near this latitude
- * @param {number} proximityLng - [Optional] Bias search near this longitude
- * @returns {Object} - { lat: 10.08, lng: 77.05, formatted: "Munnar, India" }
+ * Uses TomTom Geocoding API to find coordinates for a location.
+ * @param {string} locationName 
+ * @param {number} proximityLat 
+ * @param {number} proximityLng 
+ * @returns {Object} 
  */
 const getCoordinates = async (locationName, proximityLat = null, proximityLng = null) => {
   if (!locationName) return null;
-
+  
   try {
-    let url = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(locationName)}&apiKey=${GEOAPIFY_KEY}`;
-    
-    // 💡 FORCE: If we have a destination city, force the search to be within a 50km radius.
-    // This physically prevents "Railway Station" from picking one in USA or Africa.
-    if (proximityLat && proximityLng) {
-      url += `&filter=circle:${proximityLng},${proximityLat},50000`; // 50,000 meters = 50km
-      url += `&bias=proximity:${proximityLng},${proximityLat}|countrycode:in`;
-    }
+    // TomTom Geocoding Service handles the API call and normalization
+    const result = await tomtomGeocodingService.geocode(locationName, {
+      limit: 1,
+      countrySet: 'IN',
+      lat: proximityLat,
+      lon: proximityLng
+    });
 
-    const response = await axios.get(url);
-
-    if (response.data.features && response.data.features.length > 0) {
-      const bestMatch = response.data.features[0];
+    if (result) {
       return {
-        lat: bestMatch.properties.lat,
-        lng: bestMatch.properties.lon,
-        formatted: bestMatch.properties.formatted
+        lat: result.lat,
+        lng: result.lng,
+        formatted: result.formatted
       };
     }
-    return null; // Not found
+    return null;
   } catch (error) {
-    console.error(`❌ Geoapify Error for ${locationName}:`, error.message);
+    logger.error(`TomTom Geocoding Error for ${locationName}:`, error);
     return null;
   }
 };
@@ -62,50 +59,32 @@ const getCoordinates = async (locationName, proximityLat = null, proximityLng = 
 /**
  * getTouristPlaces (RAG Feature)
  * ------------------------------
- * Fetches REAL tourist attractions near a location.
+ * Uses TomTom Search API to fetch attractions near a location.
  * @param {number} lat 
  * @param {number} lng 
- * @returns {Array} - List of places [{name, lat, lng, address}]
+ * @returns {Array} 
  */
 const getTouristPlaces = async (lat, lng) => {
   if (!lat || !lng) return [];
 
   try {
-    // Radius: 10km (10000m), Limit: 30 places
-    const url = `https://api.geoapify.com/v2/places?categories=tourism&filter=circle:${lng},${lat},10000&limit=30&apiKey=${GEOAPIFY_KEY}`;
-    const response = await axios.get(url);
+    // Search for "attractions" near the coordinates
+    const results = await tomtomSearchService.searchPOI('tourist attractions', lat, lng, {
+      radius: 10000, // 10km
+      limit: 30
+    });
 
-    if (response.data.features) {
-      return response.data.features.map(f => ({
-        name: f.properties.name || f.properties.formatted, // Fallback if name is empty
-        lat: f.properties.lat,
-        lng: f.properties.lon,
-        address: f.properties.formatted,
-        category: f.properties.categories[0] // e.g. "tourism.sights"
-      })).filter(p => p.name); // Filter out unnamed places
-    }
-    return [];
-  } catch (error) {
-    console.error("❌ Geoapify Places Error:", error.message);
-    return [];
-  }
-};
-
-const getNearbyFuelStations = async (lat, lng) => {
-  if (!lat || !lng) return [];
-  try {
-    const url = `https://api.geoapify.com/v2/places?categories=amenity.fuel&filter=circle:${lng},${lat},5000&limit=10&apiKey=${GEOAPIFY_KEY}`;
-    const response = await axios.get(url);
-    return response.data.features.map(f => ({
-      name: f.properties.name || "Petrol Station",
-      lat: f.properties.lat,
-      lng: f.properties.lon,
-      address: f.properties.formatted
+    return results.map(poi => ({
+      name: poi.name,
+      lat: poi.lat,
+      lng: poi.lng,
+      address: poi.address,
+      category: poi.categoryName || poi.category
     }));
   } catch (error) {
-    console.error("❌ Fuel Search Error:", error.message);
+    logger.error("TomTom POI Search Error:", error);
     return [];
   }
 };
 
-module.exports = { getCoordinates, getTouristPlaces, getNearbyFuelStations };
+module.exports = { getCoordinates, getTouristPlaces };
