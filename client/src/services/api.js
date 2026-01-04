@@ -108,13 +108,86 @@ export const deleteTrip = async (tripId) => {
     }
 };
 
+// [NEW] Trip Status & Progress
+export const updateTripStatus = async (tripId, status) => {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await api.patch(`/trips/${tripId}/status`, { status }, {
+             headers: { Authorization: `Bearer ${token}` }
+        });
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || error.message;
+    }
+};
+
+export const toggleActivityStatus = async (tripId, activityId, isCompleted) => {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await api.patch(`/trips/${tripId}/activity`, { activityId, isCompleted }, {
+             headers: { Authorization: `Bearer ${token}` }
+        });
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || error.message;
+    }
+};
+
+export const validateTrip = async (tripData) => {
+    try {
+        const response = await api.post('/trips/validate', tripData, { timeout: 120000 });
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || error.message;
+    }
+};
+
+/**
+ * AI Booking Agent: Search Mock Hotels
+ */
+export const searchHotels = async (destination, budget, days) => {
+    try {
+        const response = await api.get(`/trips/hotels/${destination}`, {
+            params: { budget, days }
+        });
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || error.message;
+    }
+};
+
+/**
+ * AI Booking Agent: Book Mock Hotel
+ */
+export const bookHotel = async (hotelId) => {
+    try {
+        const response = await api.post('/trips/book-hotel', { hotelId });
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || error.message;
+    }
+};
+
+/**
+ * AI Booking Agent: Confirm Hotel Booking
+ */
+export const confirmHotelBooking = async (tripId, bookingData) => {
+    try {
+        const response = await api.post(`/trips/${tripId}/confirm-hotel`, bookingData);
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || error.message;
+    }
+};
+
 // [PHASE 3] Search Along Route
 export const searchAlongRoute = async (query, routePoints, options = {}) => {
   try {
     const response = await api.post('/trips/search-along-route', {
       query,
       routePoints,
-      maxDetourTime: options.maxDetourTime || 900 // Default 15 mins
+      maxDetourTime: options.maxDetourTime || 900, // Default 15 mins
+      limit: options.limit // [NEW]
     });
     return response.data.data;
   } catch (error) {

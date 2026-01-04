@@ -86,7 +86,7 @@ const searchPOI = async (query, lat, lng, options = {}) => {
  * @param {number} radius - Search radius in meters
  * @returns {Array} - Array of POIs
  */
-const searchNearby = async (category, lat, lng, radius = 5000) => {
+const searchNearby = async (category, lat, lng, radius = 5000, limit = 20) => {
   if (!category || !lat || !lng) return [];
   if (!TOMTOM_API_KEY) {
     logger.error("TomTom API Key Missing", new Error("TOMTOM_API_KEY not found in .env"));
@@ -102,11 +102,11 @@ const searchNearby = async (category, lat, lng, radius = 5000) => {
         lat,
         lon: lng,
         radius,
-        limit: 20,
+        limit: Math.min(limit, 100), // Max TomTom allow is often 100
         categorySet: category,
         language: 'en-US'
       },
-      timeout: 5000
+      timeout: 10000 // Increased timeout for larger searches
     });
 
     if (response.data.results && response.data.results.length > 0) {

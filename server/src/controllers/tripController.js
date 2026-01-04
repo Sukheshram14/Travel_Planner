@@ -23,7 +23,9 @@ const geoService = require('../services/geoService');
 const geminiService = require('../services/geminiService');
 const weatherService = require('../services/weatherService');
 const routingService = require('../services/routingService'); // 🚩 Import Routing
+const bookingAgentService = require('../services/bookingAgentService'); // [NEW]
 const Trip = require('../models/Trip');
+const HotelBooking = require('../models/HotelBooking'); // [NEW]
 const { generateItinerary } = require('../services/geminiService');
 const logger = require('../utils/logger'); // 📊 Performance Logger
 
@@ -250,11 +252,22 @@ const getTrip = async (req, res) => {
 
   try {
     const { id } = req.params;
-    const trip = await Trip.findById(id);
+    const trip = await Trip.findById(id).populate('hotelBookings');
 
     if (!trip) {
       logger.end(globalLabel);
       return res.status(404).json({ status: 'fail', message: 'Trip not found' });
+    }
+
+    // [Fallback] Manually fetch bookings if virtual population failed
+    let tripObj = trip.toObject();
+    if (!tripObj.hotelBookings || tripObj.hotelBookings.length === 0) {
+      const manualBookings = await HotelBooking.find({ trip: id });
+      if (manualBookings && manualBookings.length > 0) {
+        tripObj.hotelBookings = manualBookings;
+      } else {
+        tripObj.hotelBookings = [];
+      }
     }
 
     // Calculate route on the fly for the saved trip
@@ -327,7 +340,7 @@ const getTrip = async (req, res) => {
     res.status(200).json({
       status: 'success',
       data: { 
-        trip,
+        trip: tripObj,
         routeGeoJSON
       }
     });
@@ -346,12 +359,24 @@ const getTrip = async (req, res) => {
 const getMyTrips = async (req, res) => {
     try {
         // req.user is attached by authMiddleware
-        const trips = await Trip.find({ user: req.user._id }).sort({ createdAt: -1 });
+        const trips = await Trip.find({ user: req.user._id })
+            .populate('hotelBookings')
+            .sort({ createdAt: -1 });
+
+        // [Fallback] For each trip, ensure bookings are checked manually if population failed
+        const tripsWithBookings = await Promise.all(trips.map(async (t) => {
+            const tripObj = t.toObject();
+            if (!tripObj.hotelBookings || tripObj.hotelBookings.length === 0) {
+                const bookings = await HotelBooking.find({ trip: t._id });
+                tripObj.hotelBookings = bookings;
+            }
+            return tripObj;
+        }));
 
         res.status(200).json({
             status: 'success',
-            results: trips.length,
-            data: trips
+            results: tripsWithBookings.length,
+            data: tripsWithBookings
         });
     } catch (error) {
         logger.error("getMyTrips Error", error);
@@ -394,11 +419,207 @@ const deleteTrip = async (req, res) => {
     }
 };
 
+/**
+ * updateTripStatus
+ * ----------------
+ * Purpose: Change trip status (e.g. "Planned" -> "In Progress")
+ */
+const updateTripStatus = async (req, res) => {
+    try {
+        const { status } = req.body;
+        const validStatuses = ['planned', 'in-progress', 'completed'];
+        
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ status: 'fail', message: 'Invalid status' });
+        }
+
+        const trip = await Trip.findByIdAndUpdate(
+            req.params.id, 
+            { status }, 
+            { new: true }
+        );
+
+        if (!trip) return res.status(404).json({ status: 'fail', message: 'Trip not found' });
+
+        res.status(200).json({ status: 'success', data: trip });
+    } catch (error) {
+        logger.error("updateTripStatus Error", error);
+        res.status(500).json({ status: 'error', message: 'Failed to update status' });
+    }
+};
+
+/**
+ * toggleActivityStatus
+ * --------------------
+ * Purpose: Mark an activity as done/not done.
+ */
+const toggleActivityStatus = async (req, res) => {
+    try {
+        const { activityId, isCompleted } = req.body;
+        const trip = await Trip.findById(req.params.id);
+
+        if (!trip) return res.status(404).json({ status: 'fail', message: 'Trip not found' });
+
+        if (isCompleted) {
+            // Add if not exists
+            if (!trip.completedActivities.includes(activityId)) {
+                trip.completedActivities.push(activityId);
+            }
+        } else {
+            // Remove if exists
+            trip.completedActivities = trip.completedActivities.filter(id => id !== activityId);
+        }
+
+        await trip.save();
+
+        res.status(200).json({ status: 'success', data: trip.completedActivities });
+    } catch (error) {
+        logger.error("toggleActivityStatus Error", error);
+        res.status(500).json({ status: 'error', message: 'Failed to update activity' });
+    }
+};
+
+/**
+ * validateTrip
+ * ------------
+ * Preliminary AI check to see if trip is realistic.
+ */
+const validateTrip = async (req, res) => {
+  try {
+    const { destination, startDate, endDate, budget, travelers, interests, origin } = req.body;
+    console.log(`📬 [API] Feasibility Request received for: ${destination}`);
+    
+    // Calculate days
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+    const validation = await geminiService.validateTripFeasibility({
+        destination,
+        days,
+        budget,
+        travelers,
+        interests,
+        origin
+    });
+
+    res.status(200).json({
+        status: 'success',
+        data: validation
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
+/**
+ * searchHotels
+ * ------------
+ */
+const searchHotels = async (req, res) => {
+    try {
+        const { destination } = req.params;
+        const { budget, days } = req.query; // Get budget and days from query
+        
+        const hotels = await bookingAgentService.getMockHotels(
+            destination, 
+            budget || 5000,
+            parseInt(days) || 3
+        );
+        
+        res.status(200).json({
+            status: 'success',
+            data: hotels
+        });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+/**
+ * bookHotel
+ * ---------
+ */
+const bookHotel = async (req, res) => {
+    try {
+        const { hotelId } = req.body;
+        // Fallback to 'guest' if auth is disabled for simulation
+        const userId = req.user ? req.user._id : 'simulated_guest_user';
+        const result = await bookingAgentService.processBooking(hotelId, userId);
+        
+        res.status(200).json({
+            status: 'success',
+            data: result
+        });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+/**
+ * confirmHotelBooking
+ * -------------------
+ * Save a confirmed hotel booking to the database
+ */
+const confirmHotelBooking = async (req, res) => {
+    try {
+        const { tripId } = req.params;
+        const { hotelDetails, guestDetails, checkIn, checkOut } = req.body;
+        
+        // Calculate number of nights and total cost
+        const checkInDate = new Date(checkIn);
+        const checkOutDate = new Date(checkOut);
+        const numberOfNights = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+        const totalCost = hotelDetails.pricePerNight * numberOfNights;
+        
+        // Generate unique confirmation ID
+        const bookingConfirmationId = `BK-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+        const confirmationCode = `CONF-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+        
+        // Get user ID (null for guest bookings)
+        const userId = req.user ? req.user._id : null;
+        
+        // Create booking record
+        const booking = await HotelBooking.create({
+            trip: tripId,
+            user: userId,
+            hotelDetails,
+            guestDetails,
+            bookingConfirmationId,
+            confirmationCode,
+            checkIn: checkInDate,
+            checkOut: checkOutDate,
+            numberOfNights,
+            totalCost,
+            status: 'confirmed'
+        });
+        
+        console.log(`✅ Hotel booking confirmed: ${bookingConfirmationId}`);
+        
+        res.status(201).json({
+            status: 'success',
+            data: {
+                booking,
+                message: `Booking confirmed for ${guestDetails.firstName} ${guestDetails.lastName}`
+            }
+        });
+    } catch (error) {
+        console.error('❌ Hotel booking failed:', error);
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
 module.exports = {
   createTrip,
   getTrip,
-  getMyTrips, // [NEW]
-  deleteTrip  // [NEW]
+  getMyTrips,
+  deleteTrip,
+  updateTripStatus,
+  toggleActivityStatus, // Keeping this as no code for updateTripProgress was provided
+  validateTrip,
+  searchHotels, // [NEW]
+  bookHotel,      // [NEW]
+  confirmHotelBooking // [NEW]
 };
 
 /**

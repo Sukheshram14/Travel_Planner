@@ -74,11 +74,11 @@ router.post('/search-poi', async (req, res) => {
 // 5. Search Nearby by Category
 router.post('/search-nearby', async (req, res) => {
   try {
-    const { category, lat, lng, radius } = req.body;
+    const { category, lat, lng, radius, limit } = req.body;
     if (!category || !lat || !lng) {
       return res.status(400).json({ status: 'error', message: 'Category, latitude, and longitude are required' });
     }
-    const results = await tomtomSearchService.searchNearby(category, lat, lng, radius);
+    const results = await tomtomSearchService.searchNearby(category, lat, lng, radius, limit);
     res.status(200).json({ status: 'success', count: results.length, data: results });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });
@@ -88,11 +88,11 @@ router.post('/search-nearby', async (req, res) => {
 // 6. Search Along Route
 router.post('/search-along-route', async (req, res) => {
   try {
-    const { query, routePoints, maxDetourTime } = req.body;
+    const { query, routePoints, maxDetourTime, limit } = req.body;
     if (!query || !routePoints) {
       return res.status(400).json({ status: 'error', message: 'Query and route points are required' });
     }
-    const results = await tomtomSearchAlongRouteService.searchAlongRoute(query, routePoints, { maxDetourTime });
+    const results = await tomtomSearchAlongRouteService.searchAlongRoute(query, routePoints, { maxDetourTime, limit });
     res.status(200).json({ status: 'success', count: results.length, data: results });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });
@@ -103,5 +103,17 @@ router.post('/search-along-route', async (req, res) => {
 // ⚠️ This captures anything not matched above (e.g., /abc, /123). Must be LAST.
 router.get('/:id', tripController.getTrip);
 router.delete('/:id', authMiddleware.protect, tripController.deleteTrip);
+
+// [NEW] Status Updates
+router.patch('/:id/status', authMiddleware.protect, tripController.updateTripStatus);
+router.patch('/:id/activity', authMiddleware.protect, tripController.toggleActivityStatus);
+
+// [NEW] Validation
+router.post('/validate', tripController.validateTrip);
+
+// [NEW] AI Booking Agent Routes
+router.get('/hotels/:destination', tripController.searchHotels);
+router.post('/book-hotel', tripController.bookHotel);
+router.post('/:tripId/confirm-hotel', tripController.confirmHotelBooking);
 
 module.exports = router;

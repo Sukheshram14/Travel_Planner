@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaMapMarkedAlt, FaTrash, FaSignOutAlt, FaCalendarAlt } from 'react-icons/fa';
+import { FaMapMarkedAlt, FaTrash, FaSignOutAlt, FaCalendarAlt, FaFilePdf } from 'react-icons/fa';
 // TODO: Implement getMyTrips and deleteTrip in api.js first
 import { getMyTrips, deleteTrip } from '../services/api'; 
 
@@ -27,7 +27,10 @@ const DashboardPage = () => {
   const fetchTrips = async () => {
       try {
           const data = await getMyTrips(); 
-          setTrips(data.data || []);
+          // Sort trips by status
+            const allTrips = data.data || [];
+            allTrips.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            setTrips(allTrips);
       } catch (error) {
           console.error("Failed to fetch trips", error);
       } finally {
@@ -50,6 +53,60 @@ const DashboardPage = () => {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       navigate('/login');
+  };
+
+  const handleDownloadPDF = (trip) => {
+      if (!window.html2pdf) {
+          alert("PDF library is still loading...");
+          return;
+      }
+
+      // Create a temporary container for PDF generation
+      const element = document.createElement('div');
+      element.style.padding = '20px';
+      element.style.background = '#0F172A';
+      element.style.color = '#F1F5F9';
+      element.style.fontFamily = "'Inter', sans-serif";
+
+      // Build a basic printable structure
+      let html = `
+          <h1 style="color: #00f7ff; text-align: center;">${trip.destination} Itinerary</h1>
+          <p style="text-align: center; color: #94a3b8;">${new Date(trip.startDate).toLocaleDateString()} - ${new Date(trip.endDate).toLocaleDateString()} | ${trip.travelers}</p>
+          <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 20px 0;">
+      `;
+
+      if (trip.itinerary && trip.itinerary.length > 0) {
+          trip.itinerary.forEach(day => {
+              html += `
+                  <div style="margin-bottom: 30px; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                      <h3 style="color: #00f7ff; margin-top: 0;">Day ${day.dayNumber}: ${day.theme || ''}</h3>
+                      <div style="display: grid; gap: 15px;">
+              `;
+
+              day.activities.forEach(act => {
+                  html += `
+                      <div style="padding: 10px; border-left: 3px solid #00f7ff; background: rgba(0,247,255,0.02);">
+                          <strong style="display: block; color: #fff;">${act.timeSlot} - ${act.name}</strong>
+                          <p style="margin: 5px 0 0; font-size: 0.9rem; color: #cbd5e1;">${act.description}</p>
+                      </div>
+                  `;
+              });
+
+              html += `</div></div>`;
+          });
+      }
+
+      element.innerHTML = html;
+
+      const opt = {
+          margin: [10, 10],
+          filename: `Trip_${trip.destination}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, backgroundColor: '#0F172A' },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      window.html2pdf().from(element).set(opt).save();
   };
 
   return (
@@ -85,35 +142,111 @@ const DashboardPage = () => {
                       </button>
                   </div>
               ) : (
-                  <div style={styles.grid}>
-                      {trips.map(trip => (
-                          <div key={trip._id} style={styles.card}>
-                              <h3>{trip.origin} ➝ {trip.destination}</h3>
-                              <div style={styles.cardMeta}>
-                                  <FaCalendarAlt /> {new Date(trip.createdAt).toLocaleDateString()}
-                              </div>
-                              <div style={styles.cardActions}>
-                                  <button 
-                                    onClick={() => navigate(`/plan?tripId=${trip._id}`)}
-                                    style={styles.viewBtn}
-                                  >
-                                    View
-                                  </button>
-                                  <button 
-                                    onClick={() => handleDelete(trip._id)}
-                                    style={styles.deleteBtn}
-                                  >
-                                    <FaTrash />
-                                  </button>
-                              </div>
-                          </div>
-                      ))}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
+                    {/* Active Trips Section */}
+                    {trips.some(t => t.status === 'in-progress') && (
+                        <div className="section-active">
+                            <h2 style={{ color: '#00f7ff', borderBottom: '1px solid rgba(0,247,255,0.3)', paddingBottom: '0.5rem' }}>🚀 On The Road</h2>
+                            <div style={styles.grid}>
+                                {trips.filter(t => t.status === 'in-progress').map(trip => (
+                                    <TripCard key={trip._id} trip={trip} navigate={navigate} handleDelete={handleDelete} handleDownloadPDF={handleDownloadPDF} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Planned Trips Section */}
+                    <div className="section-planned">
+                         <h2 style={{ color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>📅 Upcoming Adventures</h2>
+                         <div style={styles.grid}>
+                            {trips.filter(t => (t.status === 'planned' || !t.status)).map(trip => (
+                                <TripCard key={trip._id} trip={trip} navigate={navigate} handleDelete={handleDelete} handleDownloadPDF={handleDownloadPDF} />
+                            ))}
+                         </div>
+                    </div>
+
+                    {/* Past Trips Section */}
+                    {trips.some(t => t.status === 'completed') && (
+                        <div className="section-completed">
+                            <h2 style={{ color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>📜 Trip History</h2>
+                            <div style={styles.grid}>
+                                {trips.filter(t => t.status === 'completed').map(trip => (
+                                    <TripCard key={trip._id} trip={trip} navigate={navigate} handleDelete={handleDelete} isPast={true} handleDownloadPDF={handleDownloadPDF} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
                   </div>
               )}
           </div>
       </div>
   );
 };
+
+const TripCard = ({ trip, navigate, handleDelete, handleDownloadPDF, isPast }) => (
+    <div style={{...styles.card, opacity: isPast ? 0.7 : 1 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+            <h3 style={{ margin: '0 0 0.5rem 0', color: isPast ? '#cbd5e1' : '#fff' }}>{trip.destination}</h3>
+            <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                    onClick={() => handleDownloadPDF(trip)}
+                    style={styles.pdfIconBtn}
+                    title="Download PDF"
+                >
+                    <FaFilePdf />
+                </button>
+                {trip.status === 'in-progress' && <span style={styles.badgeActive}>LIVE</span>}
+            </div>
+        </div>
+        
+        <div style={styles.cardMeta}>
+             <span>{new Date(trip.startDate).toLocaleDateString()}</span>
+             <span>•</span>
+             <span>{trip.travelers}</span>
+             <span>•</span>
+             <span>{trip.budget}</span>
+        </div>
+
+        {trip.hotelBookings && trip.hotelBookings.length > 0 && (
+            <div style={{ 
+                marginBottom: '1rem', 
+                padding: '0.5rem 0.8rem', 
+                background: 'rgba(0, 247, 255, 0.1)', 
+                border: '1px solid rgba(0, 247, 255, 0.3)',
+                borderRadius: '6px', 
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: '#00f7ff'
+            }}>
+                <FaHotel />
+                <div>Hotel Booked: <strong>{trip.hotelBookings[0].hotelDetails.name}</strong></div>
+            </div>
+        )}
+
+        {isPast && (
+            <div style={{ marginBottom: '1rem', padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '0.85rem' }}>
+                <div>✨ Activities Done: {trip.completedActivities?.length || 0}</div>
+            </div>
+        )}
+
+        <div style={styles.cardActions}>
+            <button 
+            onClick={() => navigate(`/plan?tripId=${trip._id}`)}
+            style={trip.status === 'in-progress' ? styles.resumeBtn : styles.viewBtn}
+            >
+            {trip.status === 'in-progress' ? 'Resume Journey' : (isPast ? 'View Details' : 'View Plan')}
+            </button>
+            <button 
+            onClick={() => handleDelete(trip._id)}
+            style={styles.deleteBtn}
+            >
+            <FaTrash />
+            </button>
+        </div>
+    </div>
+);
 
 const styles = {
   container: {
@@ -234,6 +367,37 @@ const styles = {
       border: 'none',
       borderRadius: '6px',
       cursor: 'pointer'
+  },
+  pdfIconBtn: {
+      padding: '0.5rem',
+      background: 'rgba(239, 68, 68, 0.1)',
+      color: '#ff4d4d',
+      border: '1px solid rgba(255, 77, 77, 0.3)',
+      borderRadius: '6px',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      transition: 'all 0.2s ease',
+  },
+  resumeBtn: {
+      flex: 1,
+      padding: '0.5rem',
+      background: 'linear-gradient(90deg, #00f7ff, #00ff9d)',
+      color: '#000',
+      border: 'none',
+      borderRadius: '6px',
+      cursor: 'pointer',
+      fontWeight: 'bold'
+  },
+  badgeActive: {
+      background: '#ef4444',
+      color: 'white',
+      fontSize: '0.6rem',
+      padding: '2px 6px',
+      borderRadius: '4px',
+      fontWeight: 'bold',
+      animation: 'pulse 2s infinite'
   }
 };
 

@@ -69,7 +69,7 @@ const TripSchema = new mongoose.Schema({
   destination: { type: String, required: true },
   startDate: { type: Date, required: true },
   endDate: { type: Date, required: true },
-  budget: { type: String, enum: ['cheap', 'moderate', 'luxury'], required: true },
+  budget: { type: Number, required: true }, // Changed from Enum for INR support
   travelers: { type: String, enum: ['solo', 'couple', 'family', 'friends'], default: 'solo' },
   
   // The Generated Itinerary (The "Result")
@@ -77,6 +77,24 @@ const TripSchema = new mongoose.Schema({
   
   // Status
   isGenerated: { type: Boolean, default: false }, // Has the AI finished?
+  status: { 
+    type: String, 
+    enum: ['planned', 'in-progress', 'completed'], 
+    default: 'planned'
+  },
+  completedActivities: [{ type: String }], // Array of Activity IDs (or Names if unique)
+  visitedLocations: [{
+    lat: Number,
+    lng: Number,
+    timestamp: { type: Date, default: Date.now }
+  }],
+  actualCosts: {
+    accommodation: { type: Number, default: 0 },
+    food: { type: Number, default: 0 },
+    activities: { type: Number, default: 0 },
+    transport: { type: Number, default: 0 },
+    total: { type: Number, default: 0 }
+  },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -87,6 +105,17 @@ const TripSchema = new mongoose.Schema({
  * Model -> Validates data against `TripSchema`
  * MongoDB -> Saves the JSON document
  */
+
+// Virtual field to populate hotel bookings
+TripSchema.virtual('hotelBookings', {
+  ref: 'HotelBooking',
+  localField: '_id',
+  foreignField: 'trip'
+});
+
+// Ensure virtuals are included in JSON
+TripSchema.set('toJSON', { virtuals: true });
+TripSchema.set('toObject', { virtuals: true });
 
 const Trip = mongoose.model('Trip', TripSchema);
 

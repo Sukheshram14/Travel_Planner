@@ -19,9 +19,10 @@
  * ==========================================================================================================================================================
  */
 
-import React from 'react';
-import { FaUtensils, FaCamera, FaBed, FaMapMarkerAlt } from 'react-icons/fa';
+import React, { useRef } from 'react';
+import { FaUtensils, FaCamera, FaBed, FaMapMarkerAlt, FaCheckCircle, FaRegCircle, FaFilePdf } from 'react-icons/fa';
 import MapComponent from './MapComponent';
+import BookingAgent from './BookingAgent'; // [NEW] AI Agent integration
 
 // Helper: Choose icon based on activity type
 const getIcon = (type) => {
@@ -32,7 +33,30 @@ const getIcon = (type) => {
   }
 };
 
-const ItineraryDisplay = ({ itinerary, weather, routeGeoJSON, activeDay, onDayClick, selectedActivityId, onActivitySelect }) => {
+const ItineraryDisplay = ({ 
+  itinerary, 
+  weather, 
+  routeGeoJSON, 
+  activeDay, 
+  onDayClick, 
+  selectedActivityId, 
+  onActivitySelect,
+  tripStatus, // [NEW]
+  completedActivities = [], // [NEW]
+  onActivityToggle, // [NEW]
+  // [NEW] Explicit props from Trip object
+  destination,
+  estimatedCosts,
+  tripId, // [NEW] For hotel booking
+  days, // [NEW] Trip duration
+  hotelBookings = [], // [NEW] Existing bookings
+  onHotelsLoaded, // [NEW] Callback for map markers
+  onBookingConfirmed, // [NEW] Callback for booking sync
+  selectedHotelId, // [NEW] For sync
+  onHotelSelect // [NEW] For sync
+}) => {
+  const pdfRef = useRef(null); // [NEW] for PDF export
+  const scrollRef = useRef(null); // [NEW]
   // [NEW] Auto-scroll to selected activity
   React.useEffect(() => {
     if (selectedActivityId) {
@@ -43,13 +67,65 @@ const ItineraryDisplay = ({ itinerary, weather, routeGeoJSON, activeDay, onDayCl
     }
   }, [selectedActivityId]);
 
+  const handleDownloadPDF = () => {
+    const element = pdfRef.current;
+    if (!element) return;
+
+    const opt = {
+      margin: [10, 10],
+      filename: `${itinerary.tripName || 'Travel_Itinerary'}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#0F172A' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    // Use html2pdf global from index.html script
+    if (window.html2pdf) {
+      window.html2pdf().from(element).set(opt).save();
+    } else {
+      alert("PDF library still loading, please try again in a second.");
+    }
+  };
+
   if (!itinerary || !itinerary.length) return null;
 
   return (
-    <div className="itinerary-timeline" style={{ marginTop: '2rem' }}>
-      <h2 style={{ color: 'var(--color-neon-green)', marginBottom: '1rem', textAlign: 'center' }}>
-        {itinerary.tripName || "Your Futuristic Plan 🚀"}
-      </h2>
+    <div ref={pdfRef} className="itinerary-timeline" style={{ marginTop: '2rem', padding: '1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+        <h2 style={{ color: 'var(--color-neon-green)', margin: 0 }}>
+          {itinerary.tripName || "Your Futuristic Plan 🚀"}
+        </h2>
+        <button 
+          onClick={handleDownloadPDF}
+          style={styles.pdfBtn}
+          title="Download as PDF for offline use"
+        >
+          <FaFilePdf /> PDF
+        </button>
+      </div>
+
+      {hotelBookings && hotelBookings.length > 0 && (
+        <div style={{ 
+          background: 'rgba(0, 247, 255, 0.1)', 
+          padding: '1rem', 
+          borderRadius: '8px', 
+          borderLeft: '4px solid #00f7ff', 
+          marginBottom: '1rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div>
+            <strong style={{ color: '#00f7ff' }}>🏨 Hotel Reserved</strong>
+            <div style={{ fontSize: '1.1rem', marginTop: '4px' }}>{hotelBookings[0].hotelDetails.name}</div>
+            <div style={{ fontSize: '0.85rem', opacity: 0.7 }}>{hotelBookings[0].hotelDetails.address}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>₹{hotelBookings[0].totalCost}</div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>{hotelBookings[0].numberOfNights} nights</div>
+          </div>
+        </div>
+      )}
 
       {/* Weather & Advice */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
@@ -70,18 +146,31 @@ const ItineraryDisplay = ({ itinerary, weather, routeGeoJSON, activeDay, onDayCl
       </div>
 
       {/* Budget Estimation */}
-      {itinerary.estimatedCosts && (
-        <div style={{ background: 'rgba(255, 215, 0, 0.1)', padding: '1rem', borderRadius: '8px', borderLeft: '4px solid #ffd700', marginBottom: '1rem' }}>
-          <strong style={{ color: '#ffd700' }}>💰 Estimated Budget (INR)</strong>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.9rem' }}>
-            <div>Accommodation: ₹{itinerary.estimatedCosts.accommodation || 0}</div>
-            <div>Food: ₹{itinerary.estimatedCosts.food || 0}</div>
-            <div>Activities: ₹{itinerary.estimatedCosts.activities || 0}</div>
-            <div>Transport: ₹{itinerary.estimatedCosts.transport || 0}</div>
-            <div style={{ fontWeight: 'bold', color: '#ffd700' }}>Total: ₹{itinerary.estimatedCosts.total || 0}</div>
+      {estimatedCosts && (
+          <div style={{ background: 'rgba(255, 215, 0, 0.1)', padding: '1rem', borderRadius: '8px', borderLeft: '4px solid #ffd700', marginBottom: '1rem' }}>
+            <strong style={{ color: '#ffd700' }}>💰 Estimated Budget (INR)</strong>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.9rem' }}>
+              <div>Accommodation: ₹{estimatedCosts.accommodation || 0}</div>
+              <div>Food: ₹{estimatedCosts.food || 0}</div>
+              <div>Activities: ₹{estimatedCosts.activities || 0}</div>
+              <div>Transport: ₹{estimatedCosts.transport || 0}</div>
+              <div style={{ fontWeight: 'bold', color: '#ffd700' }}>Total: ₹{estimatedCosts.total || 0}</div>
+            </div>
           </div>
-        </div>
       )}
+      
+      {/* AI Booking Agent Section */}
+      <BookingAgent 
+        destination={destination || "your destination"} 
+        budget={estimatedCosts?.accommodation || 5000} 
+        tripId={tripId}
+        days={days || 3}
+        existingBookings={hotelBookings}
+        onHotelsLoaded={onHotelsLoaded}
+        onBookingConfirmed={onBookingConfirmed}
+        selectedHotelId={selectedHotelId} // [NEW]
+        onHotelSelect={onHotelSelect} // [NEW]
+      />
 
       {/* Famous Attractions */}
       {itinerary.famousAttractions && itinerary.famousAttractions.length > 0 && (
@@ -180,7 +269,49 @@ const ItineraryDisplay = ({ itinerary, weather, routeGeoJSON, activeDay, onDayCl
                             <FaMapMarkerAlt /> View on Map
                           </a>
                         )}
+
+                        {/* [NEW] Checkbox for Active Trips */}
+                        {tripStatus === 'in-progress' && (
+                            <div 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onActivityToggle(activity.id || activity.name, !completedActivities.includes(activity.id || activity.name));
+                                }}
+                                style={{
+                                    cursor: 'pointer',
+                                    padding: '0.5rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    color: completedActivities.includes(activity.id || activity.name) ? '#4ade80' : '#475569',
+                                    fontSize: '1.2rem',
+                                    transition: 'all 0.2s',
+                                    borderLeft: '1px solid rgba(255,255,255,0.1)',
+                                    paddingLeft: '1rem',
+                                    marginLeft: '0.5rem'
+                                }}
+                                title={completedActivities.includes(activity.id || activity.name) ? "Mark as not visited" : "Mark as visited"}
+                            >
+                                {completedActivities.includes(activity.id || activity.name) ? <FaCheckCircle /> : <FaRegCircle />}
+                            </div>
+                        )}
+                        
+                        {/* Only show "Completed" badge if trip is completed or history */}
+                        {(tripStatus === 'completed' || tripStatus === 'history') && completedActivities.includes(activity.id || activity.name) && (
+                             <div style={{ color: '#4ade80', fontSize: '1.2rem', padding: '0.5rem' }} title="Visited">
+                                <FaCheckCircle />
+                             </div>
+                        )}
                       </div>
+
+                      {/* Action Buttons */}
+                      <div style={{ 
+                        marginTop: '0.8rem', 
+                        paddingTop: '0.8rem', 
+                        borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                        display: 'flex',
+                        gap: '0.5rem',
+                        justifyContent: 'flex-start'
+                      }}></div>
                     </div>
                   </div>
 
@@ -371,6 +502,21 @@ const styles = {
     letterSpacing: '1px',
     width: 'fit-content',
   },
+  pdfBtn: {
+    background: 'rgba(255, 50, 50, 0.1)',
+    color: '#ff4d4d',
+    border: '1px solid rgba(255, 50, 50, 0.3)',
+    padding: '0.6rem 1.2rem',
+    borderRadius: '12px',
+    fontSize: '0.9rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.6rem',
+    transition: 'all 0.2s ease',
+    backdropFilter: 'blur(10px)'
+  }
 };
 
 export default ItineraryDisplay;

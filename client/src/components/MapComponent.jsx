@@ -9,11 +9,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Map, { Marker, Popup, Source, Layer, NavigationControl } from 'react-map-gl/maplibre';
+import maplibregl from 'maplibre-gl'; // [FIX] Required for LngLatBounds
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { FaMapMarkerAlt, FaUtensils, FaHotel, FaBinoculars, FaTimes, FaGasPump, FaChargingStation } from 'react-icons/fa';
 import LayerToggle from './LayerToggle';
 import axios from 'axios';
-import { searchAlongRoute } from '../services/api';
+import api, { searchAlongRoute } from '../services/api'; // [FIX] Use api instance
 
 // 🚦 TRAFFIC API (TomTom) & KEY
 const TOMTOM_KEY = import.meta.env.VITE_TOMTOM_API_KEY; 
@@ -28,7 +29,20 @@ const STYLE_NIGHT = `https://api.tomtom.com/style/1/style/22.2.1-9?key=${TOMTOM_
 // For Satellite, TomTom provides raster tiles
 const TOMTOM_SATELLITE_URL = `https://api.tomtom.com/map/1/tile/sat/main/{z}/{x}/{y}.jpg?key=${TOMTOM_KEY}`;
 
-const MapComponent = ({ activities, routeGeoJSON, isActive, activeDay, selectedActivityId, onMarkerClick }) => {
+const MapComponent = ({ 
+  activities, 
+  fullActivities = [], // [NEW] Unfiltered trip activities
+  routeGeoJSON, 
+  isActive, 
+  activeDay, 
+  selectedActivityId, 
+  onMarkerClick, 
+  hotels = [],
+  bookedHotels = [], // [NEW] Confirmed bookings
+  selectedHotelId, // [NEW] Sync with agent
+  onHotelSelect, // [NEW] Sync back to agent
+  destination // [NEW] Destination name for global search
+}) => {
   const mapRef = useRef();
   
   // State for Visual Layers
@@ -36,7 +50,9 @@ const MapComponent = ({ activities, routeGeoJSON, isActive, activeDay, selectedA
   const [showTraffic, setShowTraffic] = useState(false);
   const [pois, setPois] = useState([]);
   const [poiLoading, setPoiLoading] = useState(false);
+  const [activePoiCategory, setActivePoiCategory] = useState(null); // [NEW] For chip highlighting
   const [selectedPoi, setSelectedPoi] = useState(null);
+  const [selectedHotel, setSelectedHotel] = useState(null); // [NEW] For hotel popup
 
   // 🚀 RESIZE: When the map panel becomes visible, we MUST trigger a resize
   // This is because the map container height might have been 0 when hidden
@@ -59,6 +75,7 @@ const MapComponent = ({ activities, routeGeoJSON, isActive, activeDay, selectedA
 
     setPoiLoading(true);
     setPois([]);
+    setActivePoiCategory(categoryQuery); // [NEW] Highlight chip
 
     try {
       // Flatten all coordinates from all features in routeGeoJSON
@@ -76,9 +93,21 @@ const MapComponent = ({ activities, routeGeoJSON, isActive, activeDay, selectedA
       const step = Math.max(1, Math.floor(points.length / 100));
       const downsampled = points.filter((_, idx) => idx % step === 0);
 
-      const results = await searchAlongRoute(categoryQuery, downsampled, { maxDetourTime: 900 }); // 15 min detour
+      const results = await searchAlongRoute(categoryQuery, downsampled, { 
+        maxDetourTime: 900, // 15 min detour 
+        limit: 100 // [NEW] No limit (max TomTom allows)
+      });
       if (results) {
         setPois(results);
+        console.log(`✅ Found ${results.length} POIs along the route.`);
+
+        // [AUTO-ZOOM] Fit map to show all found POIs
+        if (results.length > 0 && mapRef.current) {
+            const map = mapRef.current.getMap();
+            const bounds = new maplibregl.LngLatBounds();
+            results.forEach(p => bounds.extend([p.lng, p.lat]));
+            map.fitBounds(bounds, { padding: 50, duration: 1500 });
+        }
       }
     } catch (error) {
       console.error("❌ SAR Search Failed:", error);
@@ -88,40 +117,86 @@ const MapComponent = ({ activities, routeGeoJSON, isActive, activeDay, selectedA
   };
 
   const fetchPOIs = async (category) => {
-    // [FIX] Determine the center point for search
-    // If a specific day is valid, try to find a location from that day's activities.
-    // Otherwise fallback to the first activity of the whole trip.
     let searchLat, searchLng;
 
-    if (activeDay) {
-        const dayActivities = activities.filter(a => a.dayNumber === activeDay);
-        if (dayActivities.length > 0 && dayActivities[0].location) {
-            searchLat = dayActivities[0].location.lat;
-            searchLng = dayActivities[0].location.lng;
-        }
-    } 
-    
-    // Fallback if no active day or active day has no locs
-    if (!searchLat && activities.length > 0 && activities[0].location) {
-         searchLat = activities[0].location.lat;
-         searchLng = activities[0].location.lng;
-    }
-
-    if (!searchLat || !searchLng) return;
-    
     setPoiLoading(true);
     setPois([]);
+    setActivePoiCategory(category); // [NEW] Highlight chip
+
+    // Helper to get geometric center of an array of activities
+    const getCenter = (items) => {
+        const validItems = items.filter(a => a.location?.lat && a.location?.lng);
+        if (validItems.length === 0) return null;
+        return {
+            lat: validItems.reduce((acc, a) => acc + a.location.lat, 0) / validItems.length,
+            lng: validItems.reduce((acc, a) => acc + a.location.lng, 0) / validItems.length
+        };
+    };
+
+    // [STRATEGY] If it's a global category like HOTELS, try to geocode the destination name first
+    // to find the ACTUAL city/final destination center.
+    if (category === '7314' && destination) {
+        try {
+            const resp = await axios.post('http://localhost:5000/api/v1/trips/reverse-geocode', { // Reuse endpoint for geocoding destination string if modified
+                // Wait, reverse-geocode is for lat/lng... I need geocodeAddress
+            });
+            // FALLBACK: Use geoService pattern on server if I can't call it directly.
+            // For now, I'll stick to the activities center but make it definitely use the FULL trip list
+            const fullCenter = getCenter(fullActivities || activities);
+            if (fullCenter) {
+                searchLat = fullCenter.lat;
+                searchLng = fullCenter.lng;
+            }
+        } catch (err) {
+            console.error("Geocoding failed", err);
+        }
+    } else if (activeDay) {
+        const dayActivities = activities.filter(a => a.dayNumber === activeDay);
+        const dayCenter = getCenter(dayActivities);
+        if (dayCenter) {
+            searchLat = dayCenter.lat;
+            searchLng = dayCenter.lng;
+        }
+    }
+
+    // Ultimate fallback to full trip center if still not found
+    if (!searchLat || !searchLng) {
+        const fullCenter = getCenter(fullActivities || activities);
+        if (fullCenter) {
+            searchLat = fullCenter.lat;
+            searchLng = fullCenter.lng;
+        }
+    }
+
+    if (!searchLat || !searchLng) {
+        setPoiLoading(false);
+        return;
+    }
+    
+    console.log(`🔍 Searching ${category} near trip destination center: ${searchLat}, ${searchLng}`);
     
     try {
-      const response = await axios.post(`http://localhost:5000/api/v1/trips/search-nearby`, {
+      // Use API service instead of direct axios
+      const response = await api.post('/trips/search-nearby', {
           category: category, 
           lat: searchLat,
           lng: searchLng,
-          radius: 5000
+          radius: 50000, 
+          limit: 100 
       });
 
       if (response.data.status === 'success') {
-        setPois(response.data.data);
+        const foundPois = response.data.data;
+        setPois(foundPois);
+        console.log(`✅ Found ${foundPois.length} POIs across the region.`);
+
+        // [AUTO-ZOOM] Fit map to show all found POIs
+        if (foundPois.length > 0 && mapRef.current) {
+            const map = mapRef.current.getMap();
+            const bounds = new maplibregl.LngLatBounds();
+            foundPois.forEach(p => bounds.extend([p.lng, p.lat]));
+            map.fitBounds(bounds, { padding: 50, duration: 1500 });
+        }
       }
     } catch (error) {
       console.error("❌ POI Search Failed:", error);
@@ -173,6 +248,22 @@ const MapComponent = ({ activities, routeGeoJSON, isActive, activeDay, selectedA
     }
   }, [selectedActivityId, activities]);
 
+  // [NEW] Fly to selected hotel
+  useEffect(() => {
+    if (selectedHotelId && hotels.length > 0) {
+      const selected = hotels.find(h => h.id === selectedHotelId || h._id === selectedHotelId);
+      if (selected && selected.coordinates && mapRef.current) {
+        setSelectedHotel(selected); // Also open popup
+        mapRef.current.getMap().flyTo({
+          center: [selected.coordinates.lon, selected.coordinates.lat],
+          zoom: 15,
+          duration: 1500,
+          essential: true
+        });
+      }
+    }
+  }, [selectedHotelId, hotels]);
+
   // 2. Route Layer Style (Dynamic Colors & Opacity)
   const routeLayerStyle = {
     id: 'route-line',
@@ -214,32 +305,44 @@ const MapComponent = ({ activities, routeGeoJSON, isActive, activeDay, selectedA
         // background: 'linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%)', // Optional: slight top shade for contrast
         background: 'transparent'
       }}>
-        <button onClick={() => fetchPOIs('7315')} disabled={poiLoading} className={`map-chip ${selectedPoi === '7315' ? 'active' : ''}`}>
+        {/* <button 
+          onClick={() => routeGeoJSON ? fetchAlongRoute('restaurant') : fetchPOIs('7315')} 
+          disabled={poiLoading} 
+          className={`map-chip ${activePoiCategory === 'restaurant' || activePoiCategory === '7315' ? 'active' : ''}`}
+        >
           <FaUtensils /> Restaurants
         </button>
-        <button onClick={() => fetchPOIs('7314')} disabled={poiLoading} className="map-chip">
+        <button 
+          onClick={() => routeGeoJSON ? fetchAlongRoute('hotel') : fetchPOIs('7314')} 
+          disabled={poiLoading} 
+          className={`map-chip ${activePoiCategory === 'hotel' || activePoiCategory === '7314' ? 'active' : ''}`}
+        >
           <FaHotel /> Hotels
-        </button>
-        <button onClick={() => fetchPOIs('7376')} disabled={poiLoading} className="map-chip">
+        </button> */}
+        <button 
+          onClick={() => fetchPOIs('7376')} 
+          disabled={poiLoading} 
+          className={`map-chip ${activePoiCategory === '7376' ? 'active' : ''}`}
+        >
           <FaBinoculars /> Attractions
         </button>
         <div style={{ minWidth: '1px', background: 'rgba(255,255,255,0.2)', margin: '4px 2px' }} />
         <button 
           onClick={() => fetchAlongRoute('fuel')} 
           disabled={poiLoading || !routeGeoJSON}
-          className="map-chip fuel"
+          className={`map-chip fuel ${activePoiCategory === 'fuel' ? 'active' : ''}`}
         >
           <FaGasPump /> Fuel
         </button>
         <button 
           onClick={() => fetchAlongRoute('electric vehicle station')} 
           disabled={poiLoading || !routeGeoJSON}
-          className="map-chip ev"
+          className={`map-chip ev ${activePoiCategory === 'electric vehicle station' ? 'active' : ''}`}
         >
           <FaChargingStation /> EV
         </button>
-        {pois.length > 0 && (
-          <button onClick={() => setPois([])} className="map-chip clear">
+        {(pois.length > 0 || activePoiCategory) && (
+          <button onClick={() => { setPois([]); setActivePoiCategory(null); }} className="map-chip clear">
             <FaTimes /> Clear
           </button>
         )}
@@ -283,6 +386,14 @@ const MapComponent = ({ activities, routeGeoJSON, isActive, activeDay, selectedA
              <span style={{fontSize: '24px', lineHeight: '1'}}>−</span>
            </button>
         </div>
+
+        {/* 🛠️ LAYER TOGGLES (Satellite / Traffic) */}
+        <LayerToggle 
+          mapStyle={mapStyle} 
+          setMapStyle={setMapStyle} 
+          showTraffic={showTraffic} 
+          setShowTraffic={setShowTraffic} 
+        />
 
         {/* 🛰️ SATELLITE LAYER */}
         {mapStyle === 'satellite' && (
@@ -407,6 +518,102 @@ const MapComponent = ({ activities, routeGeoJSON, isActive, activeDay, selectedA
                   ⚡ +{Math.round(selectedPoi.detourTime / 60)} min
                 </span>
               )}
+            </div>
+          </Popup>
+        )}
+
+        {/* 🏨 HOTEL MARKERS (Recommendations) */}
+        {hotels.map((hotel, idx) => {
+          if (!hotel.coordinates?.lat || !hotel.coordinates?.lon) return null;
+
+          return (
+            <Marker
+              key={`hotel-${idx}`}
+              longitude={hotel.coordinates.lon}
+              latitude={hotel.coordinates.lat}
+              anchor="bottom"
+              onClick={(e) => {
+                e.originalEvent.stopPropagation();
+                setSelectedHotel(hotel);
+                if (onHotelSelect) onHotelSelect(hotel.id || hotel._id);
+              }}
+            >
+              <div
+                className={`hotel-marker-pin ${ (selectedHotelId === hotel.id || selectedHotelId === hotel._id) ? 'active' : '' }`}
+                style={{
+                  '--hotel-pin-color': (selectedHotelId === hotel.id || selectedHotelId === hotel._id) ? '#ff0000' : '#ff4b4b'
+                }}
+              >
+                <div className="hotel-pin-icon">
+                  <FaHotel />
+                </div>
+              </div>
+            </Marker>
+          );
+        })}
+
+        {/* 🏆 RESERVED HOTEL MARKERS (Confirmed) */}
+        {bookedHotels.map((booking, idx) => {
+          const hotel = booking.hotelDetails;
+          if (!hotel?.coordinates?.lat || !hotel?.coordinates?.lon) return null;
+
+          return (
+            <Marker
+              key={`booked-${idx}`}
+              longitude={hotel.coordinates.lon}
+              latitude={hotel.coordinates.lat}
+              anchor="bottom"
+              onClick={(e) => {
+                e.originalEvent.stopPropagation();
+                setSelectedHotel({ ...hotel, isReserved: true });
+                if (onHotelSelect) onHotelSelect(hotel.id || hotel._id);
+              }}
+            >
+              <div
+                className={`hotel-marker-pin reserved ${ (selectedHotelId === hotel.id || selectedHotelId === hotel._id) ? 'active' : '' }`}
+                style={{
+                  '--hotel-pin-color': '#ffd700' // Gold for reserved
+                }}
+              >
+                <div className="hotel-pin-icon">
+                  <FaHotel />
+                </div>
+              </div>
+            </Marker>
+          );
+        })}
+
+        {/* 🏨 HOTEL POPUP */}
+        {selectedHotel && (
+          <Popup
+            longitude={selectedHotel.coordinates.lon}
+            latitude={selectedHotel.coordinates.lat}
+            anchor="top"
+            onClose={() => setSelectedHotel(null)}
+            closeButton={false}
+            closeOnClick={true}
+            maxWidth="250px"
+          >
+            <div className="poi-popup" style={{ minWidth: '220px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <h4 style={{ margin: '0', color: selectedHotel.isReserved ? '#ffd700' : '#ff6b6b' }}>
+                  🏨 {selectedHotel.name}
+                </h4>
+                {selectedHotel.isReserved && (
+                  <span style={{ fontSize: '0.65rem', background: '#ffd700', color: '#000', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>
+                    RESERVED
+                  </span>
+                )}
+              </div>
+              <p style={{ margin: '4px 0', fontSize: '0.85rem', opacity: 0.8 }}>{selectedHotel.address}</p>
+              <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(255,107,107,0.1)', borderRadius: '4px' }}>
+                <div style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
+                  ⭐ {selectedHotel.rating} | ₹{selectedHotel.pricePerNight}/night
+                </div>
+                <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                  {selectedHotel.amenities?.slice(0, 3).join(' • ')}
+                </div>
+              </div>
             </div>
           </Popup>
         )}

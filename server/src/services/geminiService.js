@@ -22,8 +22,27 @@
 
 const { GoogleGenAI } = require("@google/genai");
 
-// Client gets API key from environment variable GEMINI_API_KEY
-const ai = new GoogleGenAI({});
+// [KEY ROTATION] Load keys from .env (comma-separated list)
+const keys = process.env.GEMINI_API_KEYS 
+  ? process.env.GEMINI_API_KEYS.split(',').map(k => k.trim()) 
+  : [process.env.GEMINI_API_KEY];
+
+let currentKeyIndex = 0;
+
+console.log(`🔑 Loaded ${keys.length} Gemini API Keys for Rotation.`);
+
+// Helper to get client with current key
+const getAI = () => {
+    const key = keys[currentKeyIndex];
+    // console.log(`🤖 Using Gemini Key Index: ${currentKeyIndex} (Ends with ...${key.slice(-4)})`);
+    return new GoogleGenAI({ apiKey: key });
+};
+
+// Helper: Rotate Key
+const rotateKey = () => {
+    currentKeyIndex = (currentKeyIndex + 1) % keys.length;
+    console.warn(`🔄 Switching to Gemini Key Index: ${currentKeyIndex}`);
+};
 
 /**
  * generateItinerary()
@@ -92,7 +111,7 @@ const generateItinerary = async (tripDetails) => {
          - The 'theme' field should describe the GEOGRAPHIC AREA or SPATIAL JOURNEY, not an arbitrary concept
          - Examples: "Arrival & City Center Exploration", "Northern Temple Circuit", "Coastal Area & Beaches"
       
-      SEARCH QUERY RULES (CRITICAL):
+      95. SEARCH QUERY RULES (CRITICAL):
       - Your 'searchQuery' must be a CLEAN entity name.
       - ❌ FORBIDDEN WORDS: "Departure", "Arrival", "Check-in", "Check-out", "Leisure", "Relaxation", "Lunch", "Dinner", "Shopping".
       - ❌ NO action words: "timings", "aarti", "meditation", "events", "trekking".
@@ -105,22 +124,20 @@ const generateItinerary = async (tripDetails) => {
       CONTEXT:
       - Origin: ${tripDetails.origin || "Not specified"}
       - Travelers: ${tripDetails.travelers}
-      - Budget: ${tripDetails.budget}
+      - Total Budget Limit: ₹${tripDetails.budget} (INR)
       - Interests: ${tripDetails.interests}
       ${originText}
       ${ragContext}
       
       BUDGET ESTIMATION (Indian Rupees ₹):
-      Provide realistic cost estimates in INR for:
-      - Accommodation per night (based on budget level)
-      - Food per day (breakfast, lunch, dinner)
-      - Activity/entry fees
-      - Local transport
+      The user has a TOTAL budget of ₹${tripDetails.budget} for this entire trip.
       
-      Budget Guidelines:
-      - cheap: ₹800-2000/day total
-      - moderate: ₹2000-5000/day total
-      - luxury: ₹5000+/day total
+      INSTRUCTION:
+      1. Provide realistic cost estimates for accommodation, food, activities, and transport.
+      2. Ensure the 'estimatedCosts.total' does NOT significantly exceed ₹${tripDetails.budget}.
+      3. Suggest accommodation (Cheap/Moderate/Luxury) that fits within this financial constraint.
+      4. If the budget is very low (e.g. < ₹1000/day), prioritize free activities and budget stays.
+      5. If the budget is high, suggest premium experiences.
       
       FAMOUS ATTRACTIONS:
       List the top 5 must-see attractions in ${tripDetails.destination} with:
@@ -135,13 +152,16 @@ const generateItinerary = async (tripDetails) => {
     `;
 
     // 🚀 CONTROLLED GENERATION with RETRY LOGIC (Handles 429 Rate Limits)
-    const MAX_RETRIES = 3;
+    // [KEY ROTATION] Increased retries to cycle through keys if needed
+    const MAX_RETRIES = keys.length * 2; 
     let attempt = 0;
     let response;
 
     while (attempt < MAX_RETRIES) {
       try {
-        response = await ai.models.generateContent({
+        // [ROTATION] Use current key client
+        const currentAI = getAI();
+        response = await currentAI.models.generateContent({
           model: "gemini-2.5-flash",
           contents: prompt,
           config: {
@@ -206,12 +226,16 @@ const generateItinerary = async (tripDetails) => {
         break; // Success! Break out of the loop.
       } catch (err) {
         attempt++;
-        if (err.message.includes("429") && attempt < MAX_RETRIES) {
-          const waitTime = Math.pow(2, attempt) * 2000; // 4s, 8s
-          console.warn(`⚠️ Rate limited (429). Retrying in ${waitTime/1000}s... (Attempt ${attempt}/${MAX_RETRIES})`);
+        // Check for 429 (Too Many Requests) OR 403 (Quota Exceeded)
+        if ((err.message.includes("429") || err.message.includes("403")) && attempt < MAX_RETRIES) {
+          console.warn(`⚠️ Rate limited (429/403). Rotating Key...`);
+          rotateKey();
+          
+          // Small backoff even after rotation to be safe
+          const waitTime = 1000; 
           await new Promise(resolve => setTimeout(resolve, waitTime));
         } else {
-          throw err; // Not a 429 or we ran out of retries
+          throw err; // Not a rate limit or we ran out of retries
         }
       }
     }
@@ -228,4 +252,85 @@ const generateItinerary = async (tripDetails) => {
   }
 };
 
-module.exports = { generateItinerary };
+/**
+ * validateTripFeasibility()
+ * -------------------------
+ * Checks if a trip is realistic based on budget, days, and distance.
+ * @returns {Object} - { isPossible: boolean, advice: string }
+ */
+const validateTripFeasibility = async (tripDetails) => {
+  try {
+    const prompt = `
+      TASK: Judge if the following trip is financially and logistically realistic.
+      
+      TRIP DETAILS:
+      - Origin: ${tripDetails.origin || 'Current Location'}
+      - Destination: ${tripDetails.destination}
+      - Duration: ${tripDetails.days} days
+      - Budget: ₹${tripDetails.budget} (Total INR)
+      - Travelers: ${tripDetails.travelers}
+      - Interests: ${tripDetails.interests}
+
+      CONSIDERATIONS:
+      1. Distance: Calculate if the budget covers travel between origin and destination.
+      2. Daily Costs: Local stay + 3 meals + entry fees in ${tripDetails.destination}.
+      3. Total Logic: If (Budget / Duration) < ₹800, it's very difficult in India.
+
+      OUTPUT FORMAT: JSON only.
+      {
+        "isPossible": boolean,
+        "advice": "Short supportive explanation or suggestion if impossible",
+        "recommendedBudget": number (Total INR recommended for this trip)
+      }
+    `;
+
+    const startTime = Date.now();
+    console.log(`🕒 [START] AI Feasibility Check: ${tripDetails.origin || 'Current Location'} -> ${tripDetails.destination} (Budget: ₹${tripDetails.budget})`);
+
+    // [ROTATION] Attempt Logic
+    let response;
+    // Simple retry loop (shorter than itinerary generation)
+    for (let i = 0; i < keys.length + 1; i++) { 
+        try {
+            const currentAI = getAI();
+            response = await currentAI.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: prompt,
+              config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: "object",
+                  properties: {
+                    isPossible: { type: "boolean" },
+                    advice: { type: "string" },
+                    recommendedBudget: { type: "number" }
+                  },
+                  required: ["isPossible", "advice", "recommendedBudget"]
+                }
+              }
+            });
+            break; // Success
+        } catch (err) {
+            if ((err.message.includes("429") || err.message.includes("403")) && i < keys.length) {
+                console.warn(`⚠️ Feasibility Check Rate Limited. Rotating...`);
+                rotateKey();
+                await new Promise(r => setTimeout(r, 1000));
+            } else {
+                throw err;
+            }
+        }
+    }
+
+    const result = JSON.parse(response.text);
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`✅ [DONE] AI Feasibility Check. Possible: ${result.isPossible}. Took ${duration}s.`);
+
+    return result;
+  } catch (error) {
+    console.error("❌ Feasibility Validation Error:", error);
+    // Fallback to true to not block the user if AI fails
+    return { isPossible: true, advice: "System validation skipped. Proceeding with caution." };
+  }
+};
+
+module.exports = { generateItinerary, validateTripFeasibility };

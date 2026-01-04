@@ -290,6 +290,99 @@ body {
     }
 }
 
+@keyframes fadeSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in {
+    animation: fadeSlideUp 0.5s ease-out;
+}
+
 .sidebar.active {
     animation: slideInLeft 0.5s ease;
+}
+
+/* 🏨 Hotel Marker Styles */
+.hotel-marker-pin {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.hotel-marker-pin::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 28px;
+    height: 28px;
+    background: var(--hotel-pin-color, #ff4b4b);
+    border-radius: 50% 50% 50% 0;
+    transform: translateX(-50%) rotate(-45deg);
+    border: 2px solid #fff;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.hotel-pin-icon {
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    color: #fff;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hotel-marker-pin.active {
+    transform: scale(1.4) translateY(-8px);
+    z-index: 1001 !important;
+}
+
+.hotel-marker-pin.active::after {
+    background: #ff0000;
+    box-shadow: 0 0 15px rgba(255, 0, 0, 0.6);
+}
+
+/* 🏆 Premium Reserved Styles */
+.hotel-marker-pin.reserved {
+    filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.4));
+}
+
+.hotel-marker-pin.reserved::after {
+    background: linear-gradient(135deg, #ffd700, #ff8c00);
+    border: 2.5px solid #fff;
+    animation: goldPulse 2s infinite ease-in-out;
+}
+
+.hotel-marker-pin.reserved.active::after {
+    box-shadow: 0 0 25px rgba(255, 215, 0, 0.8);
+    transform: translateX(-50%) rotate(-45deg) scale(1.1);
+}
+
+@keyframes goldPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7);
+    }
+
+    70% {
+        box-shadow: 0 0 0 15px rgba(255, 215, 0, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 215, 0, 0);
+    }
 }
