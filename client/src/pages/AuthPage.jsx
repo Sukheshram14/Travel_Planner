@@ -69,7 +69,7 @@ const AuthPage = () => {
             <div style={styles.card}>
                 <div style={styles.header}>
                     <FaGlobeAmericas size={40} color="#00f7ff" />
-                    <h1 style={styles.title}>Travel Planner</h1>
+                    <h1 style={styles.title}>Travera</h1>
                     <p style={styles.subtitle}>
                         Your personal AI travel companion. <br/>
                         Sign in to save your trips.
