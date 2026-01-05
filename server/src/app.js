@@ -63,8 +63,25 @@ const createApplication = () => {
   app.use(express.json());
 
   // Teach: "What is CORS?"
-  // Allow requests from any origin (for now). In production, we restrict this to our specific frontend domain.
-  app.use(cors());
+  // In production, we restrict this to our specific frontend domain.
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    process.env.FRONTEND_URL // Will be added in Render/Railway dashboard
+  ].filter(Boolean);
+
+  app.use(cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true
+  }));
 
   // 4. Routes (The Signs)
   // ---------------------

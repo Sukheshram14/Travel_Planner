@@ -21,9 +21,9 @@
 import axios from 'axios';
 
 // 1. Create Axios Instance
-// Teach: We preset the Base URL so we don't type "http://localhost:5000" every time.
+// Teach: We use an environment variable for the Base URL so it can change based on where the app is running.
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api/v1',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
