@@ -87,6 +87,7 @@ const styles = {
     alignItems: 'center',
     textAlign: 'center',
     background: 'radial-gradient(circle at center, #1a1a1a 0%, #000000 100%)', // Subtle gradient
+    paddingTop: '80px', // Prevent navbar overlap
   },
   hero: {
     marginBottom: '4rem',

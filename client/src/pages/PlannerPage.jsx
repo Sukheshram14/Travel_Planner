@@ -51,6 +51,9 @@ const PlannerPage = () => {
   const [discoveredHotels, setDiscoveredHotels] = useState([]); // [NEW] For map markers
   const [selectedHotelId, setSelectedHotelId] = useState(null); // [NEW] For sync
   
+  // [FIX] Mobile View State (Map vs List)
+  const [showMapMobile, setShowMapMobile] = useState(false); // Default to List View
+
   const handleMarkerClick = (id) => { // Renamed from handleActivitySelect
     setSelectedActivityId(id);
   };
@@ -185,6 +188,7 @@ const PlannerPage = () => {
         setWeather(response.data.weather);
         setRouteGeoJSON(response.data.routeGeoJSON);
         setFormVisible(false); // Hide form and show results
+        setShowMapMobile(false); // [FIX] Default to List View on mobile when new trip generates
         setValidationResult(null); // Reset for next time
       }
     } catch (err) {
@@ -209,6 +213,12 @@ const PlannerPage = () => {
     setActiveDay(dayNum);
   };
 
+  // [FIX] Determine visibility classes
+  // Sidebar (Form/List) is active if: Form is Visible OR (Not in Map Mode)
+  const isSidebarActive = formVisible || !showMapMobile;
+  // Map is active if: Not in Form Mode AND In Map Mode
+  const isMapActive = !formVisible && showMapMobile;
+
   return (
     <div className="planner-page" style={{ 
       display: 'flex', 
@@ -220,13 +230,22 @@ const PlannerPage = () => {
         paddingTop: '60px'
     }}>
       {trip && (
-        <button onClick={() => setFormVisible(!formVisible)} className="mobile-toggle">
-          {formVisible ? '🗺️ View Map' : '📝 View Plan'}
+        <button 
+            onClick={() => {
+                if (formVisible) {
+                    setFormVisible(false); // Close form, return to result view
+                } else {
+                    setShowMapMobile(!showMapMobile); // Toggle Map/List
+                }
+            }} 
+            className="mobile-toggle"
+        >
+          {formVisible ? '❎ Close Form' : (showMapMobile ? '📝 View Plan' : '🗺️ View Map')}
         </button>
       )}
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <div className={`sidebar ${formVisible ? 'active' : 'hidden'}`} style={{ 
+        <div className={`sidebar ${isSidebarActive ? 'active' : 'hidden'}`} style={{ 
             width: trip ? '450px' : '100%',
             maxWidth: trip ? '450px' : '800px',
             margin: trip ? '0' : '0 auto',
@@ -560,7 +579,7 @@ const PlannerPage = () => {
         </div>
 
         {trip && (
-          <div className={`map-panel ${!formVisible ? 'active' : 'hidden'}`} style={{ flex: 1, position: 'relative', minWidth: '300px' }}>
+          <div className={`map-panel ${!formVisible && showMapMobile ? 'active' : 'hidden'}`} style={{ flex: 1, position: 'relative', minWidth: '300px' }}>
              <div style={{ width: '100%', height: '100%' }}>
                 {(() => {
                    const fullItinerary = trip.itinerary || [];

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaMapMarkedAlt, FaTrash, FaSignOutAlt, FaCalendarAlt, FaFilePdf } from 'react-icons/fa';
+import { FaMapMarkedAlt, FaTrash, FaSignOutAlt, FaCalendarAlt, FaFilePdf, FaHotel } from 'react-icons/fa';
 // TODO: Implement getMyTrips and deleteTrip in api.js first
 import { getMyTrips, deleteTrip } from '../services/api'; 
 
