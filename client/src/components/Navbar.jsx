@@ -23,7 +23,7 @@ const Navbar = () => {
         <nav style={styles.nav} className="navbar">
             <div style={styles.logo} onClick={() => { setIsMenuOpen(false); navigate('/'); }}>
                 <FaRocket color="#00f7ff" />
-                <span style={styles.logoText} className="navbar-logo-text">TravelPlanner</span>
+                <span style={styles.logoText} className="navbar-logo-text">Travera</span>
             </div>
 
             {/* Mobile Menu Toggle */}
