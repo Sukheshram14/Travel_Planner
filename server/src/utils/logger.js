@@ -59,6 +59,15 @@ const logger = {
    */
   error: (label, err) => {
     console.error(`❌ [ERROR] ${label}:`, err.message || err);
+  },
+
+  /**
+   * warn(message)
+   * --------------
+   * Simple formatted warning log.
+   */
+  warn: (message) => {
+    console.warn(`⚠️ [WARN] ${message}`);
   }
 };
 
