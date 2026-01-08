@@ -20,13 +20,14 @@
  */
 
 const geoService = require('../services/geoService');
+const groqService = require('../services/groqService');
 const geminiService = require('../services/geminiService');
 const weatherService = require('../services/weatherService');
 const routingService = require('../services/routingService'); // 🚩 Import Routing
 const bookingAgentService = require('../services/bookingAgentService'); // [NEW]
 const Trip = require('../models/Trip');
 const HotelBooking = require('../models/HotelBooking'); // [NEW]
-const { generateItinerary } = require('../services/geminiService');
+const { generateItinerary } = require('../services/groqService');
 const logger = require('../utils/logger'); // 📊 Performance Logger
 
 /**
@@ -94,7 +95,7 @@ const createTrip = async (req, res) => {
     logger.end("Ph3: Weather & RAG Context Discovery");
 
     // 3. Call the AI Service (The "Brain") with Real Data Context
-    logger.start("Ph4: Gemini AI Generation");
+    logger.start("Ph4: Groq AI Generation");
     const aiResponse = await generateItinerary({
       origin: req.body.origin,
       destination: destCoords ? destCoords.formatted : destination,
@@ -104,7 +105,7 @@ const createTrip = async (req, res) => {
       interests,
       realPlaces // <--- PASSING REAL DATA TO AI
     });
-    logger.end("Ph4: Gemini AI Generation");
+    logger.end("Ph4: Groq AI Generation");
 
     // Attach our Real Data to the AI response
     aiResponse.route = initialRoute; 
@@ -494,7 +495,7 @@ const validateTrip = async (req, res) => {
     const end = new Date(endDate);
     const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
 
-    const validation = await geminiService.validateTripFeasibility({
+    const validation = await groqService.validateTripFeasibility({
         destination,
         days,
         budget,

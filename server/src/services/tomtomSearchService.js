@@ -15,124 +15,121 @@
 
 const axios = require('axios');
 const logger = require('../utils/logger');
+const { getTomTomKey, rotateTomTomKey, getKeyCount } = require('../utils/tomtomKeyManager');
 
-const TOMTOM_API_KEY = process.env.TOMTOM_API_KEY;
 const TOMTOM_BASE_URL = 'https://api.tomtom.com/search/2';
 
 /**
  * searchPOI
- * ---------
- * Search for Points of Interest near a location.
- * 
- * @param {string} query - Search query (e.g., "restaurants", "hotels", "temples")
- * @param {number} lat - Latitude of search center
- * @param {number} lng - Longitude of search center
- * @param {Object} options - Optional filters
- * @returns {Array} - Array of POIs with coordinates
  */
 const searchPOI = async (query, lat, lng, options = {}) => {
   if (!query || !lat || !lng) return [];
-  if (!TOMTOM_API_KEY) {
-    logger.error("TomTom API Key Missing", new Error("TOMTOM_API_KEY not found in .env"));
-    return [];
-  }
 
-  try {
-    const url = `${TOMTOM_BASE_URL}/poiSearch/${encodeURIComponent(query)}.json`;
-    
-    const response = await axios.get(url, {
-      params: {
-        key: TOMTOM_API_KEY,
-        lat,
-        lon: lng,
-        radius: options.radius || 10000, // 10km default
-        limit: options.limit || 20,
-        language: 'en-US',
-        categorySet: options.categorySet // Optional category filter
-      },
-      timeout: 5000
-    });
+  const maxAttempts = getKeyCount() || 1;
+  let attempts = 0;
 
-    if (response.data.results && response.data.results.length > 0) {
-      return response.data.results.map(result => ({
-        name: result.poi?.name || result.address?.freeformAddress,
-        category: result.poi?.categories?.[0] || 'general',
-        categoryName: result.poi?.categorySet?.[0]?.name,
-        lat: result.position.lat,
-        lng: result.position.lon,
-        address: result.address?.freeformAddress,
-        phone: result.poi?.phone,
-        url: result.poi?.url,
-        distance: result.dist, // Distance from search center in meters
-        rating: result.rating?.value
-      }));
+  while (attempts < maxAttempts) {
+    try {
+      const url = `${TOMTOM_BASE_URL}/poiSearch/${encodeURIComponent(query)}.json`;
+      const key = getTomTomKey();
+      
+      const response = await axios.get(url, {
+        params: {
+          key,
+          lat,
+          lon: lng,
+          radius: options.radius || 10000,
+          limit: options.limit || 20,
+          language: 'en-US',
+          categorySet: options.categorySet
+        },
+        timeout: 5000
+      });
+
+      if (response.data.results && response.data.results.length > 0) {
+        return response.data.results.map(result => ({
+          name: result.poi?.name || result.address?.freeformAddress,
+          category: result.poi?.categories?.[0] || 'general',
+          categoryName: result.poi?.categorySet?.[0]?.name,
+          lat: result.position.lat,
+          lng: result.position.lon,
+          address: result.address?.freeformAddress,
+          phone: result.poi?.phone,
+          url: result.poi?.url,
+          distance: result.dist,
+          rating: result.rating?.value
+        }));
+      }
+      return [];
+    } catch (error) {
+      attempts++;
+      if ((error.response?.status === 403 || error.response?.status === 429) && attempts < maxAttempts) {
+        logger.warn("TomTom Search POI Quota Exceeded. Rotating key...");
+        rotateTomTomKey();
+      } else {
+        logger.error("TomTom POI Search Error", error);
+        return [];
+      }
     }
-
-    return [];
-  } catch (error) {
-    logger.error("TomTom POI Search Error", error);
-    return [];
   }
+  return [];
 };
 
 /**
  * searchNearby
- * ------------
- * Search for POIs by category near a location.
- * 
- * @param {string} category - Category ID (e.g., "7315" for restaurants)
- * @param {number} lat - Latitude
- * @param {number} lng - Longitude
- * @param {number} radius - Search radius in meters
- * @returns {Array} - Array of POIs
  */
 const searchNearby = async (category, lat, lng, radius = 5000, limit = 20) => {
   if (!category || !lat || !lng) return [];
-  if (!TOMTOM_API_KEY) {
-    logger.error("TomTom API Key Missing", new Error("TOMTOM_API_KEY not found in .env"));
-    return [];
-  }
 
-  try {
-    const url = `${TOMTOM_BASE_URL}/nearbySearch/.json`;
-    
-    const response = await axios.get(url, {
-      params: {
-        key: TOMTOM_API_KEY,
-        lat,
-        lon: lng,
-        radius,
-        limit: Math.min(limit, 100), // Max TomTom allow is often 100
-        categorySet: category,
-        language: 'en-US'
-      },
-      timeout: 10000 // Increased timeout for larger searches
-    });
+  const maxAttempts = getKeyCount() || 1;
+  let attempts = 0;
 
-    if (response.data.results && response.data.results.length > 0) {
-      return response.data.results.map(result => ({
-        name: result.poi?.name || result.address?.freeformAddress,
-        category: result.poi?.categories?.[0] || category,
-        categoryName: result.poi?.categorySet?.[0]?.name,
-        lat: result.position.lat,
-        lng: result.position.lon,
-        address: result.address?.freeformAddress,
-        phone: result.poi?.phone,
-        url: result.poi?.url,
-        distance: result.dist
-      }));
+  while (attempts < maxAttempts) {
+    try {
+      const url = `${TOMTOM_BASE_URL}/nearbySearch/.json`;
+      const key = getTomTomKey();
+      
+      const response = await axios.get(url, {
+        params: {
+          key,
+          lat,
+          lon: lng,
+          radius,
+          limit: Math.min(limit, 100),
+          categorySet: category,
+          language: 'en-US'
+        },
+        timeout: 10000
+      });
+
+      if (response.data.results && response.data.results.length > 0) {
+        return response.data.results.map(result => ({
+          name: result.poi?.name || result.address?.freeformAddress,
+          category: result.poi?.categories?.[0] || category,
+          categoryName: result.poi?.categorySet?.[0]?.name,
+          lat: result.position.lat,
+          lng: result.position.lon,
+          address: result.address?.freeformAddress,
+          phone: result.poi?.phone,
+          url: result.poi?.url,
+          distance: result.dist
+        }));
+      }
+      return [];
+    } catch (error) {
+      attempts++;
+      if ((error.response?.status === 403 || error.response?.status === 429) && attempts < maxAttempts) {
+        logger.warn("TomTom Nearby Search Quota Exceeded. Rotating key...");
+        rotateTomTomKey();
+      } else {
+        logger.error("TomTom Nearby Search Error", error);
+        return [];
+      }
     }
-
-    return [];
-  } catch (error) {
-    logger.error("TomTom Nearby Search Error", error);
-    return [];
   }
+  return [];
 };
 
-/**
- * Common POI Categories
- */
 const POI_CATEGORIES = {
   RESTAURANT: '7315',
   HOTEL: '7314',
@@ -146,8 +143,5 @@ const POI_CATEGORIES = {
   ATM: '7397'
 };
 
-module.exports = { 
-  searchPOI, 
-  searchNearby,
-  POI_CATEGORIES 
-};
+module.exports = { searchPOI, searchNearby, POI_CATEGORIES };
+

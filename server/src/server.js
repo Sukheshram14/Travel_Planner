@@ -46,6 +46,7 @@ const startServer = async () => {
     
     // Teach: Mongoose connects to our Atlas Cloud Database.
     await mongoose.connect(MONGODB_URI);
+
     console.log('✅ MongoDB Connected Successfully');
 
     // 2. Start the Network Listener
