@@ -7,7 +7,7 @@
 
 **Title:** AI-Powered Personalized Travel Itinerary Planner
 **Theme/Category:** Travel & Tourism / Smart Automation
-**Team Name:** [Insert Your Team Name Here]
+**Team Name:** DevKings
 
 ---
 
